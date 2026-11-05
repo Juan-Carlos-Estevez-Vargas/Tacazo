@@ -192,6 +192,7 @@ export class Sala {
       cantar: m.cantar ?? null,
       blanca: m.blanca ?? null,
       hash,
+      ms: this.turnoVence === null ? 0 : Math.max(0, TURNO_MS - (this.turnoVence - this.reloj.ahora())),
     });
     if (v.state.phase === "terminada") this.terminar();
     else this.iniciarTurno();

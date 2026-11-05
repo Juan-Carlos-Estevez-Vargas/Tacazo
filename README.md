@@ -88,6 +88,7 @@ pnpm run check                     # formato, lint, tipos, pruebas y build
 | `pnpm --filter @tacazo/client dev` | Cliente en modo desarrollo |
 | `pnpm --filter @tacazo/game-server dev` | Servidor de partidas en modo desarrollo |
 | `DATABASE_URL=... pnpm --filter @tacazo/api migrar` | Monta o pone al día la base de datos |
+| `DATABASE_URL=... pnpm --filter @tacazo/api senales` | Trabajo nocturno de señales anti-trampas |
 | `node scripts/check-secrets.mjs --history` | Busca secretos en los archivos y en el historial |
 | `node scripts/check-links.mjs` | Revisa los enlaces internos de la documentación |
 
@@ -128,6 +129,7 @@ subirlo se publica el release con sus notas, y los cambios quedan en el
 | [Juego](docs/JUEGO.md) | Modos, formas de jugar y reglas |
 | [Física](docs/FISICA.md) | Motor determinista y mesas como datos |
 | [Multijugador](docs/MULTIJUGADOR.md) | Mensajes, reconexión, matchmaking y ranking |
+| [Moderación](docs/MODERACION.md) | Señales anti-trampas, reportes, sanciones y apelaciones |
 | [Economía](docs/ECONOMIA.md) | Monedas, anuncios y tienda |
 | [Marca](docs/MARCA.md) | Logo, colores, tipografía, sonido y animación |
 | [Arquitectura](docs/ARQUITECTURA.md) | Piezas del sistema y cómo se conectan |

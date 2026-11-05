@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b",
-    "migrar": "tsc -b && node dist/cli-migrar.js"
+    "migrar": "tsc -b && node dist/cli-migrar.js",
+    "senales": "tsc -b && node dist/cli-senales.js"
   },
   "dependencies": {
     "@tacazo/core": "workspace:*",
