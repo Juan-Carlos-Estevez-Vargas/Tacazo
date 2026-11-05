@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { POOL_9FT, createRng, createWorld, rack8, type SimEvent } from "../index.js";
+import * as bola8 from "./bola8.js";
 import {
   ballsOnTable,
   canPlaceCueBall,
@@ -193,5 +194,24 @@ describe("bola en mano y bolas repuestas", () => {
           (2 * POOL_9FT.ballRadius) ** 2,
         );
     expect(ballsOnTable(world)).toContain(8);
+  });
+});
+
+describe("reloj y abandono", () => {
+  it("se acaba el tiempo en juego: bola en mano para el rival", () => {
+    const s = bola8.timeoutFoul(withGroups());
+    expect(s.turn).toBe(1);
+    expect(s.ballInHand).toBe("cualquiera");
+  });
+
+  it("se acaba el tiempo en el saque: saca el rival desde la cabecera", () => {
+    const s = bola8.timeoutFoul(newGame(0));
+    expect(s).toMatchObject({ turn: 1, phase: "saque", ballInHand: "cabecera" });
+  });
+
+  it("abandono: gana el otro", () => {
+    const s = bola8.forfeit(withGroups(), 0);
+    expect(s).toMatchObject({ phase: "terminada", winner: 1, loss: "abandono" });
+    expect(bola8.forfeit(s, 1)).toBe(s);
   });
 });
