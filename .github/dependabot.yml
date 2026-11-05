@@ -10,15 +10,11 @@ updates:
     groups:
       acciones:
         patterns: ["*"]
-  # - package-ecosystem: npm        # JS / TS
-  # - package-ecosystem: maven      # Java (pom.xml)
-  # - package-ecosystem: gradle     # Java (build.gradle)
-  # - package-ecosystem: composer   # PHP
-  # - package-ecosystem: pip        # Python
-  #   directory: /
-  #   schedule:
-  #     interval: weekly
-  #   groups:
-  #     dependencias:
-  #       patterns: ["*"]
-  #       update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dependencias:
+        patterns: ["*"]
+        update-types: [minor, patch]

@@ -2,19 +2,31 @@
 
 ## 1. Visión general
 
-Qué hace el sistema y cuáles son sus piezas principales. El diagrama está en
+Tacazo es un juego de billar 1 contra 1 en tiempo real. Un paquete `core`
+con la física y las reglas es compartido por el cliente, el servidor de
+partidas y el bot, así el servidor puede simular cada tiro y tener la última
+palabra. El diagrama está en
 [DIAGRAMAS.md](DIAGRAMAS.md#arquitectura-general).
 
 ## 2. Tecnologías y por qué
 
 | Pieza | Tecnología | Por qué |
 | --- | --- | --- |
-| | | |
+| Monorepo | pnpm workspaces + TypeScript `strict` | Un solo lenguaje y tipos compartidos entre cliente y servidor ([ADR 0002](adr/0002-monorepo-typescript.md)) |
+| Motor y reglas | `packages/core`, sin dependencias | Determinista: el lint prohíbe `Math.random`, el reloj y las APIs del navegador |
+| Cliente | Vite + PixiJS (fase 1) | 60 fps en celulares de gama media |
+| Servidor de partidas | Node.js + Colyseus (fase 2) | Salas con estado y autoridad del servidor |
+| API | Node.js + Fastify + Zod (fase 3) | Cuentas, ranking y economía separados de las partidas |
+| Pruebas | Vitest | Rápido y con el mismo TypeScript |
 
 ## 3. Estructura de carpetas
 
 ```
-src/        código de la aplicación
+packages/core/      física, mesas como datos, reglas y tipos de mensajes
+apps/client/        juego y menús (Vite)
+apps/game-server/   salas autoritativas
+apps/api/           cuentas, ranking y economía
+apps/bot/           IA de práctica y pruebas de carga
 docs/       documentación, diagramas y decisiones (adr/)
 extras/     piezas opcionales para copiar (i18n-react: base de idiomas)
 scripts/    utilidades de CI y mantenimiento, con sus pruebas

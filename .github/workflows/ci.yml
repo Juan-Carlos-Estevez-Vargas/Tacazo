@@ -3,9 +3,9 @@
 #   1. Busca secretos en los archivos y en todo el historial de git.
 #   2. Revisa que los enlaces internos de la documentación no estén rotos.
 #   3. Corre las pruebas de los scripts (scripts/*.test.mjs).
-#   4. Detecta el stack por sus archivos y corre sus pruebas y su auditoría
-#      de dependencias. Cuando el proyecto tenga su propio comando (por
-#      ejemplo `npm run check`), reemplaza el paso "Pruebas" por ese comando.
+#   4. Instala el monorepo con pnpm, audita dependencias y corre
+#      `pnpm run check`: formato, lint (incluye la regla de motor
+#      determinista), tipos, pruebas y build.
 name: CI
 
 on:
@@ -38,34 +38,11 @@ jobs:
         run: node scripts/check-links.mjs
       - name: Pruebas de los scripts
         run: node --test "scripts/*.test.mjs"
-      - name: Pruebas y auditoría de dependencias
+      - name: Instalar dependencias del monorepo
         run: |
-          set -euo pipefail
-          ran=0
-          if [ -f package.json ]; then
-            ran=1; npm ci
-            npm audit --audit-level=high
-            npm run --if-present typecheck
-            npm run --if-present lint
-            npm test --if-present
-            npm run --if-present build
-          fi
-          if [ -f pom.xml ]; then ran=1; mvn -B -ntp verify; fi
-          if [ -f gradlew ]; then ran=1; chmod +x gradlew; ./gradlew build; fi
-          if [ -f composer.json ]; then
-            ran=1; composer install --no-interaction --prefer-dist
-            composer audit
-            if [ -x vendor/bin/phpunit ]; then vendor/bin/phpunit; fi
-          fi
-          if [ -f pyproject.toml ] || [ -f requirements.txt ]; then
-            ran=1; python -m pip install --upgrade pip pip-audit pytest
-            if [ -f requirements.txt ]; then pip install -r requirements.txt; pip-audit -r requirements.txt; fi
-            if [ -f pyproject.toml ]; then pip install -e .; fi
-            pytest || [ $? -eq 5 ]   # 5 = no hay pruebas todavía
-          fi
-          if [ -f CMakeLists.txt ]; then
-            ran=1; cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-            cmake --build build
-            (cd build && ctest --output-on-failure)
-          fi
-          if [ "$ran" = 0 ]; then echo "::notice::No se detectó un stack: solo se revisaron secretos, enlaces y scripts."; fi
+          corepack enable
+          pnpm install --frozen-lockfile
+      - name: Auditoría de dependencias
+        run: pnpm audit --audit-level high
+      - name: Formato, lint, tipos, pruebas y build
+        run: pnpm run check

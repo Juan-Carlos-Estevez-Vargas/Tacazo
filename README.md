@@ -70,19 +70,21 @@ de otros juegos; las reglas del billar son de dominio público.
 
 ## Inicio rápido
 
-El monorepo llega con la issue #2. Mientras tanto, las pruebas de los
-scripts de la plantilla corren así:
+Requisitos: Node 22 (`.nvmrc`) y pnpm (`corepack enable`).
 
 ```bash
-node --test "scripts/*.test.mjs"
-node scripts/check-links.mjs
-node scripts/check-secrets.mjs
+pnpm install
+pnpm --filter @tacazo/client dev   # mesa en http://localhost:5173
+pnpm run check                     # formato, lint, tipos, pruebas y build
 ```
 
 ## Scripts
 
 | Comando | Qué hace |
 | --- | --- |
+| `pnpm run check` | Todo lo que corre CI: formato, lint, tipos, pruebas y build |
+| `pnpm test` | Pruebas con Vitest |
+| `pnpm --filter @tacazo/client dev` | Cliente en modo desarrollo |
 | `node scripts/check-secrets.mjs --history` | Busca secretos en los archivos y en el historial |
 | `node scripts/check-links.mjs` | Revisa los enlaces internos de la documentación |
 
@@ -153,9 +155,9 @@ GitHub también muestra el botón **Sponsor** del repositorio
 ## Primeros pasos de la plantilla
 
 - [x] Reemplazar `Tacazo` y `Tacazo` en todos los archivos (`node scripts/iniciar-proyecto.mjs` lo hace solo)
-- [ ] Dejar en `.github/dependabot.yml` solo los ecosistemas que use el proyecto
-- [ ] Ajustar los lenguajes de `.github/workflows/codeql.yml` (CodeQL y Scorecard solo corren en repos públicos; en uno privado se saltan solos)
-- [ ] Cambiar el paso «Pruebas» de `.github/workflows/ci.yml` por el comando propio del proyecto cuando exista (por ejemplo `npm run check`)
+- [x] Dejar en `.github/dependabot.yml` solo los ecosistemas que use el proyecto
+- [x] Ajustar los lenguajes de `.github/workflows/codeql.yml` (CodeQL y Scorecard solo corren en repos públicos; en uno privado se saltan solos)
+- [x] Cambiar el paso «Pruebas» de `.github/workflows/ci.yml` por el comando propio del proyecto cuando exista (por ejemplo `npm run check`)
 - [ ] GitHub → Settings → General: permitir solo *squash merge* y borrar ramas al fusionar
 - [ ] GitHub → Settings → Rules: proteger la rama principal (PR obligatorio, CI en verde, sin force push)
 - [ ] GitHub → Settings → Code security: Secret scanning, Push protection, Dependabot alerts y Private vulnerability reporting

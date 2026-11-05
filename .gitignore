@@ -25,3 +25,9 @@ __pycache__/
 Thumbs.db
 *.log
 coverage/
+
+# Monorepo
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo

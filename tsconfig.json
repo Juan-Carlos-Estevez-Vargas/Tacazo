@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "apps/client" },
+    { "path": "apps/game-server" },
+    { "path": "apps/api" },
+    { "path": "apps/bot" }
+  ]
+}

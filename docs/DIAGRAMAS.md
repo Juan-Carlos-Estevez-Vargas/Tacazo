@@ -15,10 +15,19 @@ cambio en la app actualiza aquí el diagrama afectado o agrega uno nuevo.
 
 ```mermaid
 flowchart LR
-  U["Usuario"] --> FE["Frontend"]
-  FE --> API["API / backend"]
-  API --> DB[("Base de datos")]
+  U["Jugador"] --> C["apps/client<br/>Vite + PixiJS"]
+  C -- "intención del tiro (WSS)" --> GS["apps/game-server<br/>salas autoritativas"]
+  C -- "HTTPS" --> API["apps/api<br/>cuentas · ranking · monedas"]
+  GS --> CORE["packages/core<br/>física y reglas"]
+  C --> CORE
+  BOT["apps/bot"] --> CORE
+  API --> DB[("PostgreSQL")]
+  GS --> R[("Redis")]
+  API --> R
 ```
+
+El cliente usa `core` solo para animar; el servidor de partidas lo usa para
+decidir el resultado.
 
 ## Modelo de datos
 
