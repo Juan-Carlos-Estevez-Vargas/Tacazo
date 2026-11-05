@@ -6,10 +6,13 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.strict,
   {
+    // Con noUncheckedIndexedAccess, indexar un arreglo que se sabe lleno pide `!`.
+    rules: { "@typescript-eslint/no-non-null-assertion": "off" },
+  },
+  {
     // Tiros dorados: corren en Node.
     files: ["packages/core/test/**/*.ts"],
     languageOptions: { globals: { process: "readonly" } },
-    rules: { "@typescript-eslint/no-non-null-assertion": "off" },
   },
   {
     // Scripts de la plantilla y archivos de configuración: corren en Node.
@@ -22,8 +25,6 @@ export default tseslint.config(
     // El motor debe ser determinista y correr igual en cliente, servidor y bot.
     files: ["packages/core/src/**/*.ts"],
     rules: {
-      // Con noUncheckedIndexedAccess, los bucles de física indexan arreglos con `!`.
-      "@typescript-eslint/no-non-null-assertion": "off",
       "no-restricted-globals": [
         "error",
         "window",
