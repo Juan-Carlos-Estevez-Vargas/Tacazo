@@ -4,9 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "migrar": "tsc -b && node dist/cli-migrar.js"
   },
   "dependencies": {
-    "@tacazo/core": "workspace:*"
+    "@tacazo/core": "workspace:*",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.11",
+    "@types/pg": "8.15.6"
   }
 }

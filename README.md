@@ -85,6 +85,7 @@ pnpm run check                     # formato, lint, tipos, pruebas y build
 | `pnpm run check` | Todo lo que corre CI: formato, lint, tipos, pruebas y build |
 | `pnpm test` | Pruebas con Vitest |
 | `pnpm --filter @tacazo/client dev` | Cliente en modo desarrollo |
+| `DATABASE_URL=... pnpm --filter @tacazo/api migrar` | Monta o pone al día la base de datos |
 | `node scripts/check-secrets.mjs --history` | Busca secretos en los archivos y en el historial |
 | `node scripts/check-links.mjs` | Revisa los enlaces internos de la documentación |
 

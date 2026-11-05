@@ -74,17 +74,45 @@ stateDiagram-v2
 
 ```mermaid
 erDiagram
-  USUARIO ||--o{ REGISTRO : crea
-  USUARIO {
+  JUGADORES ||--o{ RATINGS : "uno por modo"
+  JUGADORES ||--o{ PARTIDAS : juega
+  JUGADORES ||--o{ AMISTADES : tiene
+  JUGADORES {
     uuid id
-    text correo
+    text nombre
+    char pais
+    text region
+    boolean invitado
+    text cuenta "privada"
   }
-  REGISTRO {
+  RATINGS {
+    uuid jugador
+    text modo
+    float r
+    float rd
+    float sigma
+    int visible "r - 2 rd"
+    int partidas
+  }
+  PARTIDAS {
     uuid id
-    uuid usuario_id
-    timestamptz creado
+    text modo
+    uuid jugador_a
+    uuid jugador_b
+    uuid ganador
+    boolean clasificatoria
+    jsonb repeticion
+  }
+  AMISTADES {
+    uuid a "a < b"
+    uuid b
   }
 ```
+
+Migraciones en `apps/api/migraciones/`. Seguridad por fila: con el rol
+`tacazo_api` cada jugador ve solo sus partidas y amistades, y edita solo su
+perfil; `tacazo_partidas` (el servidor de partidas) guarda partidas y ratings.
+Detalle en [ADR 0004](adr/0004-postgres-migraciones-rls.md).
 
 ## Inicio de sesión y permisos
 

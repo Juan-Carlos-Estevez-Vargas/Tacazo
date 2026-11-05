@@ -18,8 +18,27 @@ servidor decide qué pasó. El ciclo está en
 La sala espera 60 s al jugador caído. Si vuelve, recibe el estado actual. Si
 no, pierde por abandono, y quien abandona seguido recibe una penalización.
 
-## Matchmaking y ranking (fase 3)
+## Emparejamiento (fase 3)
 
-- Cola por modo, sala y región; el rango de rating aceptado se amplía con la
-  espera; se evita repetir el mismo rival muchas veces seguidas.
-- Glicko-2 por modo. Solo las clasificatorias mueven el rating.
+Código: `apps/game-server/src/emparejamiento.ts`. Hay una cola por modo y sala.
+
+| Regla | Valor |
+| --- | --- |
+| Rango de rating al entrar | ±100 |
+| Crecimiento del rango | +10 por segundo de espera, hasta ±500 |
+| Las dos partes aceptan | La diferencia debe caber en el rango de ambos |
+| Región | Solo la misma durante 15 s; después cualquiera, prefiriendo la misma |
+| Rival repetido | Ninguno de los últimos 3 hasta esperar 60 s |
+| Prioridad | Primero quien más espera; se elige el rating más parecido |
+
+## Ranking (fase 3)
+
+Código: `apps/api/src/glicko2.ts` y `apps/api/src/ranking.ts`.
+
+- Glicko-2 por modo con τ = 0,5. Empieza en 1500 ± 350.
+- Cada partida clasificatoria es un período de un resultado; las amistosas no
+  mueven el rating.
+- El rating que se muestra es `r − 2·RD`: un jugador nuevo empieza en 800 y
+  sube a medida que el sistema lo conoce.
+- Tablas global y por país (desde 10 partidas) y de amigos (sin mínimo), con
+  los 100 primeros.
