@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Tacazo</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#0B1512" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b1512;
+        color: #f7f5ee;
+        font-family: system-ui, sans-serif;
+      }
+      main {
+        display: grid;
+        place-items: center;
+        height: 100%;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+      canvas {
+        max-width: 100%;
+        height: auto;
+        border-radius: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <canvas id="mesa" width="1016" height="508" aria-label="Mesa de pool de 9 pies"></canvas>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
