@@ -2,19 +2,35 @@
 
 ## Requisitos
 
+- Node 22 y pnpm.
+- Un proyecto de Neon con PostgreSQL 16 y Neon Auth (Google y correo).
+- Un sitio de Cloudflare Turnstile para crear invitados.
+- Un servidor para `apps/game-server` (WebSocket) y otro para `apps/api`.
+
 ## Variables de entorno
 
 | Variable | Dónde va | Pública | Para qué |
 | --- | --- | --- | --- |
-| | | sí / no | |
+| `DATABASE_URL` | API y trabajo nocturno | no | Conexión a PostgreSQL (Neon) con el usuario dueño |
+| `NEON_AUTH_URL` | API y cliente | sí | URL de Neon Auth, por ejemplo `https://ep-x.aws.neon.tech/neondb/auth` |
+| `TACAZO_SECRETO` | API y servidor de partidas | no | Firma tokens de invitado y de partida. 32 bytes al azar |
+| `TURNSTILE_SECRETO` | API | no | Clave secreta de Turnstile; obligatoria en producción |
+| `TURNSTILE_SITIO` | Cliente | sí | Clave pública de Turnstile |
+| `TACAZO_ORIGENES` | API y servidor de partidas | sí | Orígenes permitidos (CORS y WebSocket), separados por comas |
+| `TACAZO_UMBRALES` | Trabajo nocturno | no | Umbrales anti-trampas en JSON ([MODERACION.md](MODERACION.md)) |
+| `PUERTO` | API (3000) y servidor de partidas (2567) | sí | Puerto HTTP |
 
 Las privadas van solo en los secretos del proveedor o de GitHub, nunca en el
 repo ni en variables que lleguen al navegador.
 
 ## Montarlo desde cero
 
-1. 
-2. 
+1. Crear el proyecto en Neon y activar Neon Auth con Google y correo.
+2. `DATABASE_URL=... pnpm --filter @tacazo/api migrar` para crear las tablas,
+   los roles y la seguridad por fila.
+3. Poner las variables de arriba en el proveedor de cada servicio.
+4. `pnpm -r build` y arrancar `apps/api` y `apps/game-server` con `pnpm start`.
+5. Programar `pnpm --filter @tacazo/api senales` una vez por noche.
 
 ## Versiones
 

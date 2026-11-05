@@ -20,3 +20,4 @@ se descartó. Así, dentro de un año, se entiende por qué el proyecto es como 
 | [0002](0002-monorepo-typescript.md) | Monorepo TypeScript con motor compartido | Aceptada |
 | [0003](0003-websocket-sin-colyseus.md) | Servidor de partidas con `ws`, sin Colyseus | Aceptada |
 | [0004](0004-postgres-migraciones-rls.md) | PostgreSQL con migraciones SQL y seguridad por fila | Aceptada |
+| [0005](0005-neon-auth.md) | Cuentas con Neon Auth y jugadores invitados | Aceptada |
