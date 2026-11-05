@@ -61,3 +61,30 @@ export function dln(x: number): number {
   }
   return 2 * sum + k * 0.6931471805599453;
 }
+
+const SQRT3 = 1.7320508075688772;
+const TAN_PI_12 = 0.2679491924311227;
+
+/** Arcotangente en [-π/2, π/2]; error menor que 1e-15. */
+export function datan(x: number): number {
+  if (x < 0) return -datan(-x);
+  if (x > 1) return HALF_PI - datan(1 / x);
+  if (x > TAN_PI_12) return PI / 6 + datan((x * SQRT3 - 1) / (x + SQRT3));
+  const x2 = x * x;
+  let term = x;
+  let sum = 0;
+  for (let n = 1; n < 30; n += 2) {
+    sum += term / n;
+    term *= -x2;
+  }
+  return sum;
+}
+
+/** Ángulo del vector (x, y), como Math.atan2. */
+export function datan2(y: number, x: number): number {
+  if (x > 0) return datan(y / x);
+  if (x < 0) return y >= 0 ? datan(y / x) + PI : datan(y / x) - PI;
+  if (y > 0) return HALF_PI;
+  if (y < 0) return -HALF_PI;
+  return 0;
+}
