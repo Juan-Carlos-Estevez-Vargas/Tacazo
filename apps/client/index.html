@@ -7,6 +7,8 @@
     <title>Tacazo</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#0B1512" />
+    <!-- Servidor de partidas; vacío = mismo host, puerto 2567. -->
+    <meta name="tacazo-servidor" content="" />
     <style>
       :root {
         --pano: #0e5a45;
@@ -35,8 +37,8 @@
         -webkit-tap-highlight-color: transparent;
       }
       #app {
-        display: grid;
-        grid-template-rows: auto auto 1fr auto;
+        display: flex;
+        flex-direction: column;
         height: 100dvh;
         padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
           max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
@@ -104,13 +106,106 @@
       .ficha.fuera {
         opacity: 0.18;
       }
+      .linea-aviso {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        min-height: 24px;
+        flex-wrap: wrap;
+      }
       #aviso {
         text-align: center;
         font-size: 14px;
-        min-height: 20px;
         color: var(--marfil);
       }
+      #reloj {
+        font-family: var(--numeros);
+        font-size: 13px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--tiza);
+      }
+      #reloj.poco {
+        border-color: #e05252;
+        color: #ff8a8a;
+      }
+      #ver-repeticion {
+        min-height: 28px;
+        padding: 2px 10px;
+      }
+      #enlace,
+      #version {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        font-size: 13px;
+      }
+      #enlace[hidden],
+      #version[hidden] {
+        display: none;
+      }
+      #enlace input {
+        flex: 1 1 220px;
+        max-width: 420px;
+        font: inherit;
+        font-family: var(--numeros);
+        font-size: 12px;
+        color: var(--marfil);
+        background: #0f1f1a;
+        border: 1px solid var(--borde);
+        border-radius: 8px;
+        padding: 8px;
+      }
+      .jugador.caido .nombre::after {
+        content: " · desconectado";
+        font-weight: 400;
+        color: #ff8a8a;
+        font-size: 12px;
+      }
+      dialog {
+        background: #0f1f1a;
+        color: var(--marfil);
+        border: 1px solid var(--borde);
+        border-radius: 14px;
+        padding: 20px;
+        width: min(360px, calc(100vw - 32px));
+      }
+      dialog::backdrop {
+        background: rgb(0 0 0 / 0.6);
+      }
+      dialog h2 {
+        font-family: var(--titulos);
+        margin: 0 0 12px;
+        font-size: 20px;
+      }
+      dialog form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      dialog input {
+        font: inherit;
+        color: var(--marfil);
+        background: var(--noche);
+        border: 1px solid var(--borde);
+        border-radius: 8px;
+        padding: 10px;
+      }
+      .acciones {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+      button.principal {
+        background: var(--tiza);
+        border-color: var(--tiza);
+      }
       #mesa {
+        flex: 1;
         min-height: 0;
         position: relative;
         touch-action: none;
@@ -232,18 +327,30 @@
     <div id="app">
       <header>
         <div class="jugador" id="j0">
-          <span class="nombre">Tú</span>
+          <span class="nombre" id="j0-nombre">Tú</span>
           <span class="grupo" id="j0-grupo">Mesa abierta</span>
           <span class="bolas" id="j0-bolas"></span>
         </div>
         <div class="marca"><img src="/marca/tacazo-icono.svg" alt="" />Tacazo</div>
         <div class="jugador" id="j1">
-          <span class="nombre">Bot</span>
+          <span class="nombre" id="j1-nombre">Bot</span>
           <span class="grupo" id="j1-grupo">Mesa abierta</span>
           <span class="bolas" id="j1-bolas"></span>
         </div>
       </header>
-      <div id="aviso" role="status" aria-live="polite"></div>
+      <div class="linea-aviso">
+        <span id="aviso" role="status" aria-live="polite"></span>
+        <span id="reloj" hidden aria-label="Tiempo del turno"></span>
+        <button id="ver-repeticion" type="button" hidden>Ver repetición</button>
+      </div>
+      <div id="enlace" hidden>
+        <span>Mándale este enlace a tu amigo:</span>
+        <input id="enlace-url" readonly aria-label="Enlace de la partida" />
+        <button id="copiar-enlace" type="button">Copiar enlace</button>
+      </div>
+      <div id="version" hidden role="alert">
+        Hay una versión nueva de Tacazo. <button type="button" onclick="location.reload()">Actualizar</button>
+      </div>
       <div id="mesa"></div>
       <footer>
         <div id="efecto" title="Efecto: toca dónde le pega el taco. Doble toque para el centro.">
@@ -267,10 +374,22 @@
           <option value="medio" selected>Bot medio</option>
           <option value="dificil">Bot difícil</option>
         </select>
-        <button id="nueva" type="button">Nueva partida</button>
+        <button id="nueva" type="button">Contra el bot</button>
+        <button id="amigo" type="button">Jugar con un amigo</button>
         <button id="sonido" type="button" aria-pressed="false">Sonido: sí</button>
       </footer>
     </div>
+    <dialog id="dialogo-nombre">
+      <form method="dialog">
+        <h2 id="dialogo-titulo">Jugar con un amigo</h2>
+        <label for="nombre">Tu nombre</label>
+        <input id="nombre" maxlength="20" autocomplete="nickname" placeholder="Invitado" />
+        <div class="acciones">
+          <button value="cancelar" formnovalidate>Cancelar</button>
+          <button value="ok" class="principal">Entrar</button>
+        </div>
+      </form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

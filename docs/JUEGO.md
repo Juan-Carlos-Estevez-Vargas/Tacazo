@@ -68,6 +68,15 @@ En pantallas verticales la mesa gira y la cabecera queda abajo. Los sonidos se
 sintetizan con Web Audio a partir de la velocidad de cada choque, y con
 "reducir movimiento" no sale el polvo de tiza.
 
+### Jugar con un amigo
+
+Con el servidor de partidas encendido, **Jugar con un amigo** crea una sala y
+muestra un enlace para copiar o compartir. Quien lo abre escribe su nombre y
+se sienta. Los dos ven el tiro del otro, el reloj de turno y los avisos de
+conexión. Si alguien recarga la página, vuelve a su silla. Al final, **Ver
+repetición** repite la partida tiro a tiro. El detalle técnico está en
+[MULTIJUGADOR.md](MULTIJUGADOR.md).
+
 ### Bot de práctica
 
 Código: `packages/core/src/bot.ts`. Busca tiros con la bola fantasma, simula
@@ -85,7 +94,8 @@ enteras y comprueban que el difícil le gana al fácil.
 
 ## Turno
 
-- El reloj de turno vive en el servidor: 30 s.
+- El reloj de turno vive en el servidor: 30 s. Si se acaba, es falta y el
+  rival tiene bola en mano.
 - Si alguien se desconecta, la sala lo espera 60 s; después pierde por abandono.
 
 ## Estudio de referencia del género
