@@ -122,6 +122,11 @@ subirlo se publica el release con sus notas, y los cambios quedan en el
 
 | Documento | Contenido |
 | --- | --- |
+| [Juego](docs/JUEGO.md) | Modos, formas de jugar y reglas |
+| [Física](docs/FISICA.md) | Motor determinista y mesas como datos |
+| [Multijugador](docs/MULTIJUGADOR.md) | Mensajes, reconexión, matchmaking y ranking |
+| [Economía](docs/ECONOMIA.md) | Monedas, anuncios y tienda |
+| [Marca](docs/MARCA.md) | Logo, colores, tipografía, sonido y animación |
 | [Arquitectura](docs/ARQUITECTURA.md) | Piezas del sistema y cómo se conectan |
 | [Diagramas](docs/DIAGRAMAS.md) | Diagramas en Mermaid de la arquitectura y de cada flujo |
 | [Despliegue](docs/DESPLIEGUE.md) | Cómo montarlo desde cero y qué variables necesita |

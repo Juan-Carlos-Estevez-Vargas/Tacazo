@@ -4,6 +4,8 @@ Diagramas en [Mermaid](https://mermaid.js.org/); GitHub los dibuja solo. Cada
 cambio en la app actualiza aquí el diagrama afectado o agrega uno nuevo.
 
 - [Arquitectura general](#arquitectura-general)
+- [Ciclo de un tiro](#ciclo-de-un-tiro)
+- [Estados de la sala](#estados-de-la-sala)
 - [Modelo de datos](#modelo-de-datos)
 - [Inicio de sesión y permisos](#inicio-de-sesión-y-permisos)
 - [Integración y despliegue](#integración-y-despliegue)
@@ -28,6 +30,45 @@ flowchart LR
 
 El cliente usa `core` solo para animar; el servidor de partidas lo usa para
 decidir el resultado.
+
+## Ciclo de un tiro
+
+```mermaid
+sequenceDiagram
+  actor A as Jugador en turno
+  participant CA as Cliente A
+  participant S as Servidor de partidas
+  participant CB as Cliente B
+  A->>CA: apunta y suelta
+  CA->>S: tirar(ángulo, fuerza, efecto, secuencia)
+  S->>S: valida turno, rangos, secuencia y reloj
+  alt inválido
+    S-->>CA: rechazo (queda como señal de la cuenta)
+  else válido
+    S->>S: simula con packages/core y aplica reglas
+    S->>S: guarda la entrada en la repetición
+    S-->>CA: resultado + hash
+    S-->>CB: resultado + hash
+    CA->>CA: anima; si el hash no coincide, toma la posición del servidor
+    CB->>CB: anima; si el hash no coincide, toma la posición del servidor
+  end
+```
+
+## Estados de la sala
+
+```mermaid
+stateDiagram-v2
+  [*] --> Esperando: se crea la sala
+  Esperando --> Saque: llegan los 2 jugadores
+  Saque --> Turno
+  Turno --> Simulando: tiro válido
+  Simulando --> Turno: sigue la partida
+  Simulando --> Terminada: alguien gana
+  Turno --> EsperaReconexion: jugador desconectado
+  EsperaReconexion --> Turno: vuelve antes de 60 s
+  EsperaReconexion --> Terminada: abandono
+  Terminada --> [*]
+```
 
 ## Modelo de datos
 
