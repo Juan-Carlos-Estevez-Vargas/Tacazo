@@ -7,7 +7,7 @@ cómo se juega cada uno y en qué fase llega.
 
 | Modo | Mesa | Fase | Estado |
 | --- | --- | --- | --- |
-| Bola 8 | Pool de 9 pies, 6 troneras | 1 | Reglas y bot listos; falta la mesa jugable (#15) |
+| Bola 8 | Pool de 9 pies, 6 troneras | 1 | Jugable contra el bot, sin conexión |
 | Bola 9 | Pool de 9 pies | 7 | Por hacer |
 | Bola 10 | Pool de 9 pies | 7 | Por hacer |
 | Carambola libre | Carambola de 2,84 m, sin troneras | 8 | Por hacer |
@@ -50,6 +50,23 @@ bandas, troneras) y deciden faltas, turno y ganador.
 | La 8 | Cuando ya no quedan bolas de su grupo. Hay que cantar la tronera |
 | Gana | Mete la 8 en la tronera cantada sin falta |
 | Pierde | Mete la 8 antes de tiempo, en otra tronera, sin cantar o con falta |
+
+### Jugar en el navegador
+
+`pnpm --filter @tacazo/client dev` abre una partida de práctica contra el bot.
+
+| Acción | Cómo |
+| --- | --- |
+| Apuntar | Mover el ratón o arrastrar el dedo sobre la mesa. Flechas ← → para afinar (con Mayús, más fino) |
+| Tirar | Arrastrar la barra de potencia y soltar |
+| Efecto | Tocar en la bola pequeña dónde le pega el taco; doble toque vuelve al centro |
+| Curva | Subir la inclinación del taco y poner efecto lateral |
+| Bola en mano | Arrastrar la blanca; detrás de la línea en el saque |
+| Cantar la 8 | Tocar la tronera; queda marcada en latón |
+
+En pantallas verticales la mesa gira y la cabecera queda abajo. Los sonidos se
+sintetizan con Web Audio a partir de la velocidad de cada choque, y con
+"reducir movimiento" no sale el polvo de tiza.
 
 ### Bot de práctica
 

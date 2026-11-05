@@ -2,38 +2,275 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex" />
     <title>Tacazo</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#0B1512" />
     <style>
+      :root {
+        --pano: #0e5a45;
+        --tiza: #2c6bd8;
+        --tiza-claro: #6c9cf0;
+        --laton: #c08a2b;
+        --laton-claro: #e0a845;
+        --marfil: #f7f5ee;
+        --noche: #0b1512;
+        --tenue: #9fb3ab;
+        --borde: #1f332c;
+        --titulos: "Anybody", "Arial Black", system-ui, sans-serif;
+        --textos: "Atkinson Hyperlegible", system-ui, sans-serif;
+        --numeros: "JetBrains Mono", ui-monospace, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
       html,
       body {
         margin: 0;
         height: 100%;
-        background: #0b1512;
-        color: #f7f5ee;
-        font-family: system-ui, sans-serif;
+        background: var(--noche);
+        color: var(--marfil);
+        font-family: var(--textos);
+        -webkit-tap-highlight-color: transparent;
       }
-      main {
+      #app {
+        display: grid;
+        grid-template-rows: auto auto 1fr auto;
+        height: 100dvh;
+        padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+          max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+        gap: 6px;
+      }
+      header {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 8px;
+      }
+      .marca {
+        font-family: var(--titulos);
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .marca img {
+        width: 24px;
+        height: 24px;
+      }
+      .jugador {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 4px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--borde);
+        min-width: 0;
+      }
+      .jugador.activo {
+        border-color: var(--tiza);
+        box-shadow: 0 0 0 1px var(--tiza) inset;
+      }
+      #j1 {
+        text-align: right;
+        align-items: flex-end;
+      }
+      .nombre {
+        font-family: var(--titulos);
+        font-weight: 700;
+        font-size: 15px;
+      }
+      .grupo {
+        font-size: 12px;
+        color: var(--tenue);
+      }
+      .bolas {
+        display: flex;
+        gap: 3px;
+        min-height: 12px;
+      }
+      .ficha {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--c);
+      }
+      .ficha.raya {
+        background: linear-gradient(var(--marfil) 25%, var(--c) 25% 75%, var(--marfil) 75%);
+      }
+      .ficha.fuera {
+        opacity: 0.18;
+      }
+      #aviso {
+        text-align: center;
+        font-size: 14px;
+        min-height: 20px;
+        color: var(--marfil);
+      }
+      #mesa {
+        min-height: 0;
+        position: relative;
+        touch-action: none;
+      }
+      #mesa canvas {
+        position: absolute;
+        inset: 0;
+      }
+      footer {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      #efecto {
+        position: relative;
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #fff, var(--marfil) 55%, #d8d4c6);
+        touch-action: none;
+        cursor: crosshair;
+        flex: none;
+      }
+      #efecto-punto {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 12px;
+        height: 12px;
+        margin: -6px 0 0 -6px;
+        border-radius: 50%;
+        background: var(--tiza);
+        pointer-events: none;
+      }
+      #potencia {
+        position: relative;
+        flex: 1 1 220px;
+        max-width: 520px;
+        height: 44px;
+        border-radius: 22px;
+        border: 1px solid var(--borde);
+        background: #0f1f1a;
+        touch-action: none;
+        cursor: ew-resize;
+        overflow: hidden;
+      }
+      #potencia-relleno {
+        --p: 0;
+        position: absolute;
+        inset: 0;
+        transform-origin: left;
+        transform: scaleX(var(--p));
+        background: linear-gradient(90deg, var(--tiza), var(--laton-claro));
+      }
+      #potencia span {
+        position: absolute;
+        inset: 0;
         display: grid;
         place-items: center;
-        height: 100%;
-        padding: 16px;
-        box-sizing: border-box;
+        font-size: 13px;
+        color: var(--tenue);
+        pointer-events: none;
       }
-      canvas {
-        max-width: 100%;
-        height: auto;
-        border-radius: 12px;
+      label,
+      select,
+      button {
+        font: inherit;
+        font-size: 13px;
+        color: var(--marfil);
+      }
+      label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--tenue);
+      }
+      input[type="range"] {
+        width: 90px;
+        accent-color: var(--tiza);
+      }
+      select,
+      button {
+        background: #0f1f1a;
+        border: 1px solid var(--borde);
+        border-radius: 8px;
+        padding: 8px 10px;
+        min-height: 40px;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:focus-visible,
+      select:focus-visible,
+      #potencia:focus-visible {
+        outline: 2px solid var(--tiza-claro);
+        outline-offset: 2px;
+      }
+      @media (max-height: 480px) {
+        .grupo {
+          display: none;
+        }
+        footer {
+          gap: 8px;
+        }
+        #potencia {
+          height: 36px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
       }
     </style>
   </head>
   <body>
-    <main>
-      <canvas id="mesa" width="1016" height="508" aria-label="Mesa de pool de 9 pies"></canvas>
-    </main>
+    <div id="app">
+      <header>
+        <div class="jugador" id="j0">
+          <span class="nombre">Tú</span>
+          <span class="grupo" id="j0-grupo">Mesa abierta</span>
+          <span class="bolas" id="j0-bolas"></span>
+        </div>
+        <div class="marca"><img src="/marca/tacazo-icono.svg" alt="" />Tacazo</div>
+        <div class="jugador" id="j1">
+          <span class="nombre">Bot</span>
+          <span class="grupo" id="j1-grupo">Mesa abierta</span>
+          <span class="bolas" id="j1-bolas"></span>
+        </div>
+      </header>
+      <div id="aviso" role="status" aria-live="polite"></div>
+      <div id="mesa"></div>
+      <footer>
+        <div id="efecto" title="Efecto: toca dónde le pega el taco. Doble toque para el centro.">
+          <span id="efecto-punto"></span>
+        </div>
+        <div
+          id="potencia"
+          role="slider"
+          aria-label="Potencia: arrastra y suelta para tirar"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+          tabindex="0"
+        >
+          <div id="potencia-relleno"></div>
+          <span>Arrastra y suelta para tirar</span>
+        </div>
+        <label>Inclinación <input id="inclinacion" type="range" min="0" max="70" value="0" /></label>
+        <select id="nivel" aria-label="Nivel del bot">
+          <option value="facil">Bot fácil</option>
+          <option value="medio" selected>Bot medio</option>
+          <option value="dificil">Bot difícil</option>
+        </select>
+        <button id="nueva" type="button">Nueva partida</button>
+        <button id="sonido" type="button" aria-pressed="false">Sonido: sí</button>
+      </footer>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
