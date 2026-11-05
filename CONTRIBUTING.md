@@ -5,7 +5,7 @@ un issue. Al participar aceptas el [código de conducta](CODE_OF_CONDUCT.md).
 
 ## Reportar errores o proponer ideas
 
-- Busca antes en los [issues](https://github.com/Juan-Carlos-Estevez-Vargas/NOMBRE-DEL-REPO/issues) para no duplicar.
+- Busca antes en los [issues](https://github.com/Juan-Carlos-Estevez-Vargas/Tacazo/issues) para no duplicar.
 - Usa la plantilla que corresponda (error o mejora).
 - Las vulnerabilidades **no** van en issues: sigue la [política de seguridad](SECURITY.md).
 

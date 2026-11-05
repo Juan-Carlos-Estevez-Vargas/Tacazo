@@ -3,7 +3,7 @@
 ## Versiones con soporte
 
 Sólo la versión desplegada desde la rama principal (el último
-[release](https://github.com/Juan-Carlos-Estevez-Vargas/NOMBRE-DEL-REPO/releases))
+[release](https://github.com/Juan-Carlos-Estevez-Vargas/Tacazo/releases))
 recibe correcciones de seguridad.
 
 | Versión | Soporte |
@@ -16,7 +16,7 @@ recibe correcciones de seguridad.
 **No abras un issue público** con los detalles de una vulnerabilidad.
 
 1. Ve a la pestaña
-   [**Security → Report a vulnerability**](https://github.com/Juan-Carlos-Estevez-Vargas/NOMBRE-DEL-REPO/security/advisories/new)
+   [**Security → Report a vulnerability**](https://github.com/Juan-Carlos-Estevez-Vargas/Tacazo/security/advisories/new)
    del repositorio y envía un reporte privado.
 2. Incluye, si puedes:
    - qué parte se ve afectada (página, función del servidor, permisos,
