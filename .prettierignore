@@ -5,3 +5,4 @@ dist/
 coverage/
 *.md
 scripts/
+packages/core/test/tiros-dorados.json
