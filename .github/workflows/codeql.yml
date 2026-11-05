@@ -1,0 +1,46 @@
+# Análisis de código con CodeQL (OWASP A03/A08): busca fallas de seguridad en
+# el código y en los flujos de GitHub Actions.
+# Los hallazgos salen en Security → Code scanning y como avisos en cada PR.
+name: CodeQL
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  schedule:
+    # Cada lunes, para encontrar reglas nuevas aunque no haya cambios.
+    - cron: "23 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analizar:
+    # Code scanning es gratis en repos públicos. En uno privado hace falta
+    # GitHub Advanced Security; sin eso el job se salta en vez de fallar.
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Ajusta: java-kotlin, python, cpp, javascript-typescript, actions...
+        language: [actions]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+      - uses: github/codeql-action/analyze@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
+        with:
+          category: /language:${{ matrix.language }}

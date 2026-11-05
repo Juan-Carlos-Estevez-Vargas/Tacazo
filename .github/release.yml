@@ -1,0 +1,20 @@
+# Cómo se agrupan las notas de cada release (las genera GitHub a partir de
+# los PR fusionados y sus etiquetas).
+changelog:
+  exclude:
+    labels: [ignorar-en-notas]
+  categories:
+    - title: 💥 Cambios incompatibles
+      labels: [breaking-change]
+    - title: ✨ Novedades
+      labels: [enhancement, feat]
+    - title: 🐛 Correcciones
+      labels: [bug, fix]
+    - title: 🔒 Seguridad
+      labels: [security]
+    - title: 📚 Documentación
+      labels: [documentation, docs]
+    - title: 📦 Dependencias
+      labels: [dependencies]
+    - title: Otros cambios
+      labels: ["*"]

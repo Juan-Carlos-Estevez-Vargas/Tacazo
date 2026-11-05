@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "editorconfig.editorconfig",
+    "bierner.markdown-mermaid",
+    "davidanson.vscode-markdownlint",
+    "github.vscode-github-actions",
+    "streetsidesoftware.code-spell-checker-spanish"
+  ]
+}

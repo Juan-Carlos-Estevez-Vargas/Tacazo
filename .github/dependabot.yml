@@ -1,0 +1,24 @@
+# Avisa con un PR cuando una dependencia o una acción de GitHub tiene una
+# versión nueva o un arreglo de seguridad (OWASP A06).
+# Deja solo los ecosistemas que use el proyecto.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      acciones:
+        patterns: ["*"]
+  # - package-ecosystem: npm        # JS / TS
+  # - package-ecosystem: maven      # Java (pom.xml)
+  # - package-ecosystem: gradle     # Java (build.gradle)
+  # - package-ecosystem: composer   # PHP
+  # - package-ecosystem: pip        # Python
+  #   directory: /
+  #   schedule:
+  #     interval: weekly
+  #   groups:
+  #     dependencias:
+  #       patterns: ["*"]
+  #       update-types: [minor, patch]

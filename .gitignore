@@ -1,0 +1,27 @@
+# Secretos y configuración local: nunca al repo.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencias y builds
+node_modules/
+vendor/
+dist/
+build/
+target/
+out/
+.gradle/
+__pycache__/
+*.pyc
+.venv/
+
+# Editores y sistema
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.log
+coverage/

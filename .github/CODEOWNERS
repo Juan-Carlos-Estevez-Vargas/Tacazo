@@ -1,0 +1,5 @@
+# Quién revisa cada parte. GitHub le pide revisión automáticamente en cada PR.
+# Cuando haya más personas, agrega reglas más específicas debajo.
+*                   @Juan-Carlos-Estevez-Vargas
+/.github/           @Juan-Carlos-Estevez-Vargas
+/scripts/           @Juan-Carlos-Estevez-Vargas

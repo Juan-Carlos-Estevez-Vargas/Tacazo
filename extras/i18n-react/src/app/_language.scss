@@ -1,0 +1,38 @@
+// Ajusta los tokens (--c-*, space(), focus-ring) a tu sistema de diseño.
+@use "../styles/abstracts" as *;
+
+// Selector de idioma: compacto en la cabecera (🌐 ES) y con etiqueta en el pie.
+.lang-picker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: space(1);
+  font-size: 0.85rem;
+
+  select {
+    min-height: 36px;
+    padding: 0.3rem 1.8rem 0.3rem 0.7rem;
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-pill);
+    background-color: var(--c-surface);
+    color: var(--c-text);
+    font: inherit;
+    cursor: pointer;
+
+    &:focus-visible { @include focus-ring; }
+  }
+
+  &--compact {
+    select { padding-left: 1.9rem; }
+  }
+
+  &__icon {
+    position: absolute;
+    left: 0.6rem;
+    pointer-events: none;
+    font-size: 0.9rem;
+  }
+
+  &__label { color: var(--c-muted); }
+}
+

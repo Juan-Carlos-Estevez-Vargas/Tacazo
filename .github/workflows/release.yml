@@ -1,0 +1,32 @@
+# Publica un release al subir un tag de versión:
+#
+#   git tag v1.2.0 && git push origin v1.2.0
+#
+# Las notas salen solas de los PR fusionados desde el tag anterior, agrupadas
+# según .github/release.yml. Solo usa la CLI de GitHub que ya trae el runner.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Crear el release con notas automáticas
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          flags=()
+          # v1.2.0-beta.1 y similares se marcan como prerelease.
+          if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes --verify-tag "${flags[@]}"

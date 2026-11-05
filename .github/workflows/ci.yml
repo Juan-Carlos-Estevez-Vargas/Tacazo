@@ -1,0 +1,71 @@
+# CI de la plantilla: corre en cada push y PR.
+#
+#   1. Busca secretos en los archivos y en todo el historial de git.
+#   2. Revisa que los enlaces internos de la documentación no estén rotos.
+#   3. Corre las pruebas de los scripts (scripts/*.test.mjs).
+#   4. Detecta el stack por sus archivos y corre sus pruebas y su auditoría
+#      de dependencias. Cuando el proyecto tenga su propio comando (por
+#      ejemplo `npm run check`), reemplaza el paso "Pruebas" por ese comando.
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Sin secretos en el repo ni en el historial
+        run: node scripts/check-secrets.mjs --history
+      - name: Enlaces internos de la documentación
+        run: node scripts/check-links.mjs
+      - name: Pruebas de los scripts
+        run: node --test "scripts/*.test.mjs"
+      - name: Pruebas y auditoría de dependencias
+        run: |
+          set -euo pipefail
+          ran=0
+          if [ -f package.json ]; then
+            ran=1; npm ci
+            npm audit --audit-level=high
+            npm run --if-present typecheck
+            npm run --if-present lint
+            npm test --if-present
+            npm run --if-present build
+          fi
+          if [ -f pom.xml ]; then ran=1; mvn -B -ntp verify; fi
+          if [ -f gradlew ]; then ran=1; chmod +x gradlew; ./gradlew build; fi
+          if [ -f composer.json ]; then
+            ran=1; composer install --no-interaction --prefer-dist
+            composer audit
+            if [ -x vendor/bin/phpunit ]; then vendor/bin/phpunit; fi
+          fi
+          if [ -f pyproject.toml ] || [ -f requirements.txt ]; then
+            ran=1; python -m pip install --upgrade pip pip-audit pytest
+            if [ -f requirements.txt ]; then pip install -r requirements.txt; pip-audit -r requirements.txt; fi
+            if [ -f pyproject.toml ]; then pip install -e .; fi
+            pytest || [ $? -eq 5 ]   # 5 = no hay pruebas todavía
+          fi
+          if [ -f CMakeLists.txt ]; then
+            ran=1; cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+            cmake --build build
+            (cd build && ctest --output-on-failure)
+          fi
+          if [ "$ran" = 0 ]; then echo "::notice::No se detectó un stack: solo se revisaron secretos, enlaces y scripts."; fi
