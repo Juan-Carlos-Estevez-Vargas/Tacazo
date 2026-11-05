@@ -15,7 +15,7 @@ palabra. El diagrama está en
 | Monorepo | pnpm workspaces + TypeScript `strict` | Un solo lenguaje y tipos compartidos entre cliente y servidor ([ADR 0002](adr/0002-monorepo-typescript.md)) |
 | Motor y reglas | `packages/core`, sin dependencias | Determinista: el lint prohíbe `Math.random`, el reloj y las APIs del navegador |
 | Cliente | Vite + PixiJS (fase 1) | 60 fps en celulares de gama media |
-| Servidor de partidas | Node.js + Colyseus (fase 2) | Salas con estado y autoridad del servidor |
+| Servidor de partidas | Node.js + `ws` (fase 2) | Salas por turnos con autoridad del servidor ([ADR 0003](adr/0003-websocket-sin-colyseus.md)) |
 | API | Node.js + Fastify + Zod (fase 3) | Cuentas, ranking y economía separados de las partidas |
 | Pruebas | Vitest | Rápido y con el mismo TypeScript |
 

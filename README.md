@@ -62,7 +62,7 @@ de otros juegos; las reglas del billar son de dominio público.
 | --- | --- |
 | Motor y reglas | TypeScript (`packages/core`), sin dependencias del navegador |
 | Interfaz | Vite + TypeScript + PixiJS; React solo para menús |
-| Servidor de partidas | Node.js + Colyseus (WebSocket, salas autoritativas) |
+| Servidor de partidas | Node.js + `ws` (WebSocket, salas autoritativas) |
 | API | Node.js + Fastify + Zod |
 | Base de datos | PostgreSQL (Neon) y Redis |
 | Pruebas | Vitest, Playwright, k6 con bots |
@@ -75,6 +75,7 @@ Requisitos: Node 22 (`.nvmrc`) y pnpm (`corepack enable`).
 ```bash
 pnpm install
 pnpm --filter @tacazo/client dev   # mesa en http://localhost:5173
+pnpm --filter @tacazo/game-server dev   # partidas en línea en :2567
 pnpm run check                     # formato, lint, tipos, pruebas y build
 ```
 
@@ -85,6 +86,7 @@ pnpm run check                     # formato, lint, tipos, pruebas y build
 | `pnpm run check` | Todo lo que corre CI: formato, lint, tipos, pruebas y build |
 | `pnpm test` | Pruebas con Vitest |
 | `pnpm --filter @tacazo/client dev` | Cliente en modo desarrollo |
+| `pnpm --filter @tacazo/game-server dev` | Servidor de partidas en modo desarrollo |
 | `node scripts/check-secrets.mjs --history` | Busca secretos en los archivos y en el historial |
 | `node scripts/check-links.mjs` | Revisa los enlaces internos de la documentación |
 

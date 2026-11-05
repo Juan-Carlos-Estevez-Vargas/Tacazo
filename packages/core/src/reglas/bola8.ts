@@ -15,9 +15,10 @@ export type Player = 0 | 1;
 export type BallInHand = "no" | "cabecera" | "cualquiera";
 
 export type Foul =
-  "blanca-en-tronera" | "sin-contacto" | "primera-bola-incorrecta" | "sin-banda" | "saque-ilegal";
+  "blanca-en-tronera" | "sin-contacto" | "primera-bola-incorrecta" | "sin-banda" | "saque-ilegal" | "tiempo";
 
-export type LossReason = "8-antes-de-tiempo" | "8-en-otra-tronera" | "8-con-falta" | "8-sin-cantar";
+export type LossReason =
+  "8-antes-de-tiempo" | "8-en-otra-tronera" | "8-con-falta" | "8-sin-cantar" | "abandono";
 
 export interface Bola8State {
   readonly phase: "saque" | "juego" | "terminada";
@@ -186,6 +187,21 @@ export function judgeShot(
     respot: [],
     pocketed,
   };
+}
+
+/**
+ * Se acabó el reloj del turno: cuenta como falta. En el saque el rival saca
+ * con la blanca en la cabecera; en juego, bola en mano en cualquier lugar.
+ */
+export function timeoutFoul(s: Bola8State): Bola8State {
+  if (s.phase === "terminada") return s;
+  return { ...s, turn: other(s.turn), ballInHand: s.phase === "saque" ? "cabecera" : "cualquiera" };
+}
+
+/** Un jugador abandonó (se desconectó y no volvió): gana el otro. */
+export function forfeit(s: Bola8State, quitter: Player): Bola8State {
+  if (s.phase === "terminada") return s;
+  return { ...s, phase: "terminada", winner: other(quitter), loss: "abandono", ballInHand: "no" };
 }
 
 /** ¿Se puede dejar la blanca en (x, y) con bola en mano? */

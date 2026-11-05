@@ -6,20 +6,33 @@ import {
   createWorld,
   rack8,
   simulateShot,
+  worldHash,
+  type BallInit,
   type BotLevel,
+  type EntradaRepeticion,
+  type MensajeServidor,
+  type Repeticion,
   type Rng,
   type Shot,
   type SimEvent,
+  type Snapshot,
   type World,
 } from "@tacazo/core";
 import type { FederatedPointerEvent } from "pixi.js";
 import { trazarGuia } from "./guia.js";
 import { BOLAS_POOL } from "./marca.js";
 import { VistaMesa, type PuntoMesa } from "./mesa.js";
+import { Red, asientoGuardado, crearSala, unirseSala, urlServidor, type Asiento } from "./red.js";
 import { Grabacion, eventosEnTiempo } from "./reproduccion.js";
 import { Sonido } from "./sonido.js";
 
-type Fase = "apuntando" | "animando" | "bot" | "fin";
+type Modo = "bot" | "red" | "repeticion";
+/**
+ * apuntando: me toca. animando: se ve un tiro. rival: le toca al otro.
+ * esperando: espero al servidor o a que llegue el amigo. fin: terminó.
+ */
+type Fase = "apuntando" | "animando" | "rival" | "esperando" | "fin";
+type Jugador = 0 | 1;
 
 const FALTAS: Record<bola8.Foul, string> = {
   "blanca-en-tronera": "la blanca cayó",
@@ -27,6 +40,7 @@ const FALTAS: Record<bola8.Foul, string> = {
   "primera-bola-incorrecta": "tocó primero una bola que no era",
   "sin-banda": "ninguna bola tocó banda",
   "saque-ilegal": "saque ilegal",
+  tiempo: "se acabó el tiempo",
 };
 
 const DERROTAS: Record<bola8.LossReason, string> = {
@@ -34,9 +48,9 @@ const DERROTAS: Record<bola8.LossReason, string> = {
   "8-en-otra-tronera": "metió la 8 en otra tronera",
   "8-con-falta": "metió la 8 con falta",
   "8-sin-cantar": "metió la 8 sin cantar tronera",
+  abandono: "abandonó la partida",
 };
 
-const NOMBRES = ["Tú", "Bot"] as const;
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 function semilla(): number {
@@ -45,12 +59,34 @@ function semilla(): number {
   return a[0]!;
 }
 
-/** Partida de práctica de bola 8 contra el bot, sin conexión. */
+function leerNombre(): string {
+  try {
+    return localStorage.getItem("tacazo.nombre") ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function guardarNombre(n: string): void {
+  try {
+    localStorage.setItem("tacazo.nombre", n);
+  } catch {
+    // Sin almacenamiento: se pedirá otra vez.
+  }
+}
+
+type Veredicto = Pick<bola8.ShotVerdict, "fouls" | "keepsTurn" | "respot">;
+
+/** Partida de bola 8: contra el bot, contra un amigo por enlace o en repetición. */
 export class Juego {
   private mundo!: World;
   private estado!: bola8.Bola8State;
   private rng!: Rng;
+  private modo: Modo = "bot";
   private fase: Fase = "apuntando";
+  private yo: Jugador = 0;
+  private nombres: [string, string] = ["Tú", "Bot"];
+  private conectados: [boolean, boolean] = [true, true];
   private angulo = 0;
   private potencia = 0;
   private efecto = { side: 0, top: 0 };
@@ -60,9 +96,23 @@ export class Juego {
   private grabacion: Grabacion | null = null;
   private eventos: { e: SimEvent; t: number }[] = [];
   private reloj = 0;
+  private inicioAnimacion = 0;
   private pendiente: (() => void) | null = null;
   private nivel: BotLevel = "medio";
   private readonly reducirMovimiento = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Partida en red.
+  private red: Red | null = null;
+  private asiento: Asiento | null = null;
+  private seq = 0;
+  private turnoVence: number | null = null;
+  private ultimoApuntado = 0;
+  /** Mensajes que llegan mientras se anima un tiro; se aplican al terminar. */
+  private cola: MensajeServidor[] = [];
+  // Repetición local (contra el bot) o descargada del servidor.
+  private inicio: BallInit[] = [];
+  private entradas: EntradaRepeticion[] = [];
+  private repeticion: { rep: Repeticion; i: number; reglas: bola8.Bola8State; huellasOk: boolean } | null =
+    null;
 
   constructor(
     private readonly vista: VistaMesa,
@@ -76,9 +126,14 @@ export class Juego {
     stage.on("pointermove", (e) => this.alMover(e));
     stage.on("pointerup", () => (this.moviendoBlanca = false));
     stage.on("pointerupoutside", () => (this.moviendoBlanca = false));
-    this.vista.app.ticker.add((t) => this.cuadro(t.deltaMS / 1000));
+    this.vista.app.ticker.add(() => {
+      this.cuadro();
+      this.relojTurno();
+    });
     this.controles();
-    this.nueva();
+    const sala = new URLSearchParams(location.search).get("sala");
+    if (sala) void this.entrarASala(sala);
+    else this.nuevaContraBot();
   }
 
   private get blanca() {
@@ -86,18 +141,180 @@ export class Juego {
   }
 
   private get miTurno(): boolean {
-    return this.estado.turn === 0 && this.fase === "apuntando";
+    return (
+      !!this.estado && this.fase === "apuntando" && this.estado.turn === this.yo && this.modo !== "repeticion"
+    );
   }
 
-  nueva(): void {
+  // ---------- Partidas ----------
+
+  nuevaContraBot(): void {
+    this.salirDeLaRed();
+    this.modo = "bot";
+    this.yo = 0;
+    this.nombres = ["Tú", "Bot"];
+    this.conectados = [true, true];
     this.rng = createRng(semilla());
-    this.mundo = createWorld(POOL_9FT, rack8(POOL_9FT, this.rng));
+    this.inicio = rack8(POOL_9FT, this.rng);
+    this.mundo = createWorld(POOL_9FT, this.inicio);
     this.estado = bola8.newGame(0);
+    this.entradas = [];
     this.fase = "apuntando";
     this.cantada = null;
     this.angulo = 0;
+    this.turnoVence = null;
+    this.mostrarRepeticion(false);
     this.aviso("Tu saque. Puedes mover la blanca detrás de la línea.");
     this.redibujar();
+  }
+
+  private salirDeLaRed(): void {
+    this.red?.cerrar();
+    this.red = null;
+    this.asiento = null;
+    this.cola = [];
+    if (location.search) history.replaceState(null, "", location.pathname);
+  }
+
+  /** Crea una sala, muestra el enlace para el amigo y se conecta. */
+  async jugarConAmigo(nombre: string): Promise<void> {
+    try {
+      const a = await crearSala(nombre);
+      asientoGuardado.guardar(a);
+      history.replaceState(null, "", `${location.pathname}?sala=${encodeURIComponent(a.sala)}`);
+      this.conectarA(a);
+      this.mostrarEnlace(a.sala);
+    } catch (e) {
+      this.aviso(e instanceof Error ? e.message : "No se pudo crear la partida");
+    }
+  }
+
+  private async entrarASala(sala: string): Promise<void> {
+    const guardado = asientoGuardado.leer(sala);
+    if (guardado) {
+      this.conectarA(guardado);
+      return;
+    }
+    const nombre = await this.pedirNombre("Te invitaron a una partida");
+    if (nombre === null) {
+      this.nuevaContraBot();
+      return;
+    }
+    try {
+      const a = await unirseSala(sala, nombre);
+      asientoGuardado.guardar(a);
+      this.conectarA(a);
+    } catch (e) {
+      this.nuevaContraBot();
+      this.aviso(e instanceof Error ? e.message : "No se pudo entrar a la partida");
+    }
+  }
+
+  private conectarA(a: Asiento): void {
+    this.red?.cerrar();
+    this.modo = "red";
+    this.asiento = a;
+    this.yo = a.jugador;
+    this.seq = 0;
+    this.fase = "esperando";
+    this.mostrarRepeticion(false);
+    this.aviso("Conectando…");
+    this.red = new Red(
+      a,
+      (m) => this.alMensaje(m),
+      (e, motivo) => {
+        if (e === "caida") this.aviso("Se cayó la conexión. Reconectando…");
+        if (e === "cerrada" && motivo) this.aviso(motivo);
+      },
+    );
+    this.red.conectar();
+  }
+
+  private alMensaje(m: MensajeServidor): void {
+    if (this.fase === "animando" && m.t !== "apunta") {
+      this.cola.push(m);
+      return;
+    }
+    switch (m.t) {
+      case "bienvenida":
+        this.yo = m.jugador;
+        this.cargar(m.estado);
+        // Al volver a entrar, la secuencia sigue donde la dejó el servidor.
+        this.seq = m.estado.secuencias[this.yo];
+        break;
+      case "estado":
+        this.cargar(m.estado);
+        break;
+      case "apunta":
+        if (this.fase === "rival") {
+          this.angulo = m.angulo;
+          this.redibujar(true);
+        }
+        break;
+      case "resultado":
+        this.verResultado(m);
+        break;
+      case "tiempo":
+        this.cargar(m.estado);
+        this.sonido.falta();
+        this.aviso(
+          `A ${m.jugador === this.yo ? "ti" : this.nombres[m.jugador]} se le acabó el tiempo. ${this.textoTurno()}`,
+        );
+        break;
+      case "rechazo":
+        if (this.fase === "esperando" && this.estado.turn === this.yo) {
+          this.seq--;
+          this.fase = "apuntando";
+        }
+        this.aviso(m.motivo);
+        this.redibujar();
+        break;
+      case "error":
+        this.fase = "fin";
+        this.aviso(m.mensaje);
+        if (m.codigo === "version") $("version").hidden = false;
+        break;
+    }
+  }
+
+  /** Toma el estado del servidor como verdad. */
+  private cargar(e: Snapshot): void {
+    this.mundo = createWorld(POOL_9FT, e.bolas);
+    for (const b of this.mundo.balls) b.onTable = e.bolas.find((x) => x.id === b.id)!.onTable;
+    this.mundo.step = e.paso;
+    this.estado = e.reglas;
+    this.nombres = [e.jugadores[0]?.nombre || "Jugador 1", e.jugadores[1]?.nombre || "Esperando…"];
+    // Una silla vacía no cuenta como desconectada.
+    const conectado = (j: Snapshot["jugadores"][number] | undefined) => !j?.nombre || j.conectado;
+    this.conectados = [conectado(e.jugadores[0]), conectado(e.jugadores[1])];
+    this.turnoVence = e.turnoRestante === null ? null : performance.now() + e.turnoRestante;
+    if (e.fase === "esperando") {
+      this.fase = "esperando";
+      this.aviso("Esperando a tu amigo. Comparte el enlace.");
+    } else if (e.fase === "terminada") {
+      this.fase = "fin";
+      this.anunciarFin(e.reglas, null);
+    } else {
+      this.fase = e.reglas.turn === this.yo ? "apuntando" : "rival";
+      if (this.estado.ballInHand !== "no" && this.fase === "apuntando") this.dejarBlanca();
+      const caido = this.conectados[this.yo === 0 ? 1 : 0]
+        ? ""
+        : "Tu rival se desconectó; lo esperamos 60 s. ";
+      this.aviso(caido + this.textoTurno());
+      $("enlace").hidden = true;
+    }
+    this.redibujar();
+  }
+
+  private textoTurno(): string {
+    if (this.estado.turn === this.yo) {
+      const mano = this.estado.ballInHand !== "no" ? "Tienes bola en mano: arrastra la blanca. " : "";
+      const ocho = bola8.needsCall(this.estado, bola8.ballsOnTable(this.mundo))
+        ? "Te toca la 8: canta tronera. "
+        : "";
+      return `${mano}${ocho}${mano || ocho ? "" : "Tu turno."}`;
+    }
+    return `Turno de ${this.nombres[this.estado.turn]}…`;
   }
 
   // ---------- Entrada ----------
@@ -140,7 +357,16 @@ export class Juego {
     const c = this.blanca;
     if (Math.abs(p.x - c.x) + Math.abs(p.y - c.y) < 0.01) return;
     this.angulo = Math.atan2(p.y - c.y, p.x - c.x);
+    this.enviarApuntado();
     this.redibujar();
+  }
+
+  private enviarApuntado(): void {
+    if (this.modo !== "red") return;
+    const ahora = performance.now();
+    if (ahora - this.ultimoApuntado < 120) return;
+    this.ultimoApuntado = ahora;
+    this.red?.enviar({ t: "apuntar", angulo: this.angulo });
   }
 
   private controles(): void {
@@ -206,7 +432,22 @@ export class Juego {
 
     const nivel = $<HTMLSelectElement>("nivel");
     nivel.addEventListener("change", () => (this.nivel = nivel.value as BotLevel));
-    $("nueva").addEventListener("click", () => this.nueva());
+    $("nueva").addEventListener("click", () => this.nuevaContraBot());
+    $("amigo").addEventListener("click", () => {
+      void this.pedirNombre("Jugar con un amigo").then((n) => {
+        if (n !== null) void this.jugarConAmigo(n);
+      });
+    });
+    $("ver-repeticion").addEventListener("click", () => void this.verRepeticion());
+    $("copiar-enlace").addEventListener("click", () => {
+      const url = $<HTMLInputElement>("enlace-url").value;
+      if (navigator.share)
+        void navigator.share({ title: "Tacazo", text: "¿Echamos una de bola 8?", url }).catch(() => {});
+      else
+        void navigator.clipboard
+          ?.writeText(url)
+          .then(() => this.aviso("Enlace copiado. Mándaselo a tu amigo."));
+    });
     const sonido = $<HTMLButtonElement>("sonido");
     sonido.addEventListener("click", () => {
       this.sonido.activo = !this.sonido.activo;
@@ -221,8 +462,40 @@ export class Juego {
       else if (e.key === "ArrowRight") this.angulo -= paso;
       else return;
       e.preventDefault();
+      this.enviarApuntado();
       this.redibujar();
     });
+  }
+
+  private pedirNombre(titulo: string): Promise<string | null> {
+    const d = $<HTMLDialogElement>("dialogo-nombre");
+    const input = $<HTMLInputElement>("nombre");
+    $("dialogo-titulo").textContent = titulo;
+    input.value = leerNombre();
+    d.showModal();
+    return new Promise((ok) => {
+      d.addEventListener(
+        "close",
+        () => {
+          if (d.returnValue !== "ok") return ok(null);
+          const n = input.value.trim().slice(0, 20) || "Invitado";
+          guardarNombre(n);
+          ok(n);
+        },
+        { once: true },
+      );
+    });
+  }
+
+  private mostrarEnlace(sala: string): void {
+    const url = `${location.origin}${location.pathname}?sala=${encodeURIComponent(sala)}`;
+    $<HTMLInputElement>("enlace-url").value = url;
+    $("copiar-enlace").textContent = "share" in navigator ? "Compartir" : "Copiar enlace";
+    $("enlace").hidden = false;
+  }
+
+  private mostrarRepeticion(v: boolean): void {
+    $("ver-repeticion").hidden = !v;
   }
 
   // ---------- Tiros ----------
@@ -240,67 +513,140 @@ export class Juego {
       top: this.efecto.top,
       elevation: this.inclinacion,
     };
-    this.ejecutar(shot, this.cantada === null ? {} : { pocket: this.cantada });
+    const call = this.cantada === null ? {} : { pocket: this.cantada };
+    if (this.modo === "red") {
+      const c = this.blanca;
+      this.seq++;
+      this.fase = "esperando";
+      this.red?.enviar({
+        t: "tirar",
+        seq: this.seq,
+        tiro: shot,
+        ...(this.cantada === null ? {} : { cantar: this.cantada }),
+        ...(this.estado.ballInHand !== "no" ? { blanca: { x: c.x, y: c.y } } : {}),
+      });
+      this.redibujar();
+      return;
+    }
+    this.tiroLocal(
+      shot,
+      call,
+      this.estado.ballInHand !== "no" ? { x: this.blanca.x, y: this.blanca.y } : null,
+    );
   }
 
-  private ejecutar(shot: Shot, call: bola8.ShotCall): void {
+  /** Tiro contra el bot: se simula y se juzga aquí mismo. */
+  private tiroLocal(shot: Shot, call: bola8.ShotCall, blanca: { x: number; y: number } | null): void {
+    const jugador = this.estado.turn;
     const antes = bola8.ballsOnTable(this.mundo);
+    const events = this.animar(shot, () => {
+      const v = bola8.judgeShot(this.estado, antes, events, call);
+      this.entradas.push({
+        tipo: "tiro",
+        jugador,
+        seq: this.entradas.length + 1,
+        tiro: shot,
+        cantar: call.pocket ?? null,
+        blanca,
+        hash: worldHash(this.mundo),
+      });
+      for (const id of v.respot) bola8.spotBall(this.mundo, id);
+      this.despues(v, v.state, jugador);
+    });
+  }
+
+  /** Tiro que decidió el servidor: se anima igual y al final manda su estado. */
+  private verResultado(m: Extract<MensajeServidor, { t: "resultado" }>): void {
+    if (m.blanca) {
+      const c = this.blanca;
+      c.x = m.blanca.x;
+      c.y = m.blanca.y;
+      c.onTable = true;
+    }
+    this.animar(m.tiro, () => {
+      if (worldHash(this.mundo) !== m.hash)
+        console.warn("La simulación local no coincide con la del servidor");
+      const quien = m.jugador;
+      this.cargar(m.estado);
+      this.mensajeVeredicto(m.veredicto, m.estado.reglas, quien);
+      this.vaciarCola();
+    });
+  }
+
+  /** Simula el tiro sobre el mundo actual, lo graba y lo reproduce. Devuelve los eventos. */
+  private animar(shot: Shot, alTerminar: () => void): SimEvent[] {
     const primerPaso = this.mundo.step;
     const blanca = { x: this.blanca.x, y: this.blanca.y };
     const grab = new Grabacion(this.mundo);
     const res = simulateShot(this.mundo, shot, (w) => grab.grabar(w));
-    const veredicto = bola8.judgeShot(this.estado, antes, res.events, call);
     this.grabacion = grab;
     this.eventos = eventosEnTiempo(res.events, primerPaso - 1);
     this.reloj = 0;
+    this.inicioAnimacion = performance.now();
     this.fase = "animando";
     this.sonido.taco(shot.power);
     if (!this.reducirMovimiento) this.vista.polvoDeTiza(blanca, shot.angle);
     this.vista.dibujarGuia(blanca, null);
     this.vista.dibujarTaco(null, 0, 0);
     this.vista.dibujarMarcas({});
-    this.pendiente = () => this.despues(veredicto);
+    this.pendiente = alTerminar;
+    return [...res.events];
   }
 
-  private despues(v: bola8.ShotVerdict): void {
-    for (const id of v.respot) bola8.spotBall(this.mundo, id);
-    const quien = NOMBRES[this.estado.turn];
-    this.estado = v.state;
-    this.cantada = null;
-    if (v.state.phase === "terminada") {
-      this.fase = "fin";
-      const gane = v.state.winner === 0;
-      if (gane) this.sonido.victoria();
-      else this.sonido.falta();
-      const porque = v.state.loss ? ` ${quien} ${DERROTAS[v.state.loss]}.` : "";
-      this.aviso(`${gane ? "¡Ganaste!" : "Ganó el bot."}${porque} Toca «Nueva partida» para jugar otra.`);
-      this.redibujar();
-      return;
-    }
-    if (v.state.ballInHand !== "no") this.dejarBlanca();
+  private vaciarCola(): void {
+    const cola = this.cola;
+    this.cola = [];
+    for (const m of cola) this.alMensaje(m);
+  }
+
+  private nombreDe(j: Jugador): string {
+    return j === this.yo ? "Tú" : this.nombres[j];
+  }
+
+  private mensajeVeredicto(v: Veredicto, nuevo: bola8.Bola8State, quien: Jugador): void {
     let msg = "";
     if (v.fouls.length) {
       this.sonido.falta();
       msg = `Falta: ${v.fouls.map((f) => FALTAS[f]).join(", ")}. `;
     }
     if (v.respot.includes(8)) msg += "La 8 vuelve al punto de pie. ";
-    const g = v.state.groups[0];
-    if (g && !this.estado.groups.every((x) => x === null) && msg === "" && v.keepsTurn)
-      msg = "¡Bien! Sigues tú. ";
-    if (this.estado.turn === 0) {
-      this.fase = "apuntando";
-      this.sonido.turno();
-      const mano = v.state.ballInHand !== "no" ? "Tienes bola en mano: arrastra la blanca. " : "";
-      const ocho = bola8.needsCall(v.state, bola8.ballsOnTable(this.mundo))
-        ? "Te toca la 8: canta tronera. "
-        : "";
-      this.aviso(`${msg}${mano}${ocho}${mano || ocho ? "" : "Tu turno."}`);
-    } else {
-      this.fase = "bot";
-      this.aviso(`${msg}Turno del bot…`);
+    if (nuevo.phase === "terminada") return;
+    if (nuevo.turn === this.yo) this.sonido.turno();
+    if (msg === "" && v.keepsTurn && quien === this.yo) msg = "¡Bien! Sigues tú. ";
+    this.aviso(msg + this.textoTurno());
+  }
+
+  private despues(v: bola8.ShotVerdict, nuevo: bola8.Bola8State, quien: Jugador): void {
+    this.estado = nuevo;
+    this.cantada = null;
+    if (nuevo.phase === "terminada") {
+      this.fase = "fin";
+      this.anunciarFin(nuevo, quien);
+      this.redibujar();
+      return;
+    }
+    if (nuevo.ballInHand !== "no") this.dejarBlanca();
+    this.mensajeVeredicto(v, nuevo, quien);
+    if (nuevo.turn === this.yo) this.fase = "apuntando";
+    else {
+      this.fase = "rival";
       setTimeout(() => this.turnoBot(), 900);
     }
     this.redibujar();
+  }
+
+  private anunciarFin(r: bola8.Bola8State, quien: Jugador | null): void {
+    this.cantada = null;
+    this.turnoVence = null;
+    const gane = r.winner === this.yo;
+    if (gane) this.sonido.victoria();
+    else this.sonido.falta();
+    const perdedor = r.winner === null ? null : r.winner === 0 ? 1 : 0;
+    const culpa =
+      r.loss && perdedor !== null ? ` ${this.nombreDe(quien ?? perdedor)} ${DERROTAS[r.loss]}.` : "";
+    const quienGana = gane ? "¡Ganaste!" : `Ganó ${r.winner === null ? "nadie" : this.nombres[r.winner]}.`;
+    this.aviso(`${quienGana}${culpa}`);
+    this.mostrarRepeticion(true);
   }
 
   /** Si la blanca cayó, la deja en un sitio válido para que se pueda mover. */
@@ -321,21 +667,106 @@ export class Juego {
   }
 
   private turnoBot(): void {
-    if (this.fase !== "bot") return;
+    if (this.fase !== "rival" || this.modo !== "bot") return;
     const m = botMove(this.mundo, this.estado, this.nivel, this.rng);
     if (m.place) bola8.placeCueBall(this.mundo, this.estado.ballInHand, m.place.x, m.place.y);
     this.angulo = m.shot.angle;
     this.cantada = m.call.pocket ?? null;
     this.redibujar(true);
-    setTimeout(() => this.ejecutar(m.shot, m.call), 700);
+    setTimeout(() => this.tiroLocal(m.shot, m.call, m.place ?? null), 700);
+  }
+
+  // ---------- Repetición ----------
+
+  private async verRepeticion(): Promise<void> {
+    let rep: Repeticion;
+    if (this.modo === "red" && this.asiento) {
+      try {
+        const r = await fetch(`${urlServidor()}/salas/${encodeURIComponent(this.asiento.sala)}/repeticion`);
+        if (!r.ok) throw new Error();
+        rep = (await r.json()) as Repeticion;
+      } catch {
+        this.aviso("No se pudo descargar la repetición.");
+        return;
+      }
+    } else if (this.repeticion) rep = this.repeticion.rep;
+    else {
+      rep = {
+        formato: 1,
+        motor: 0,
+        sala: "local",
+        mesa: POOL_9FT.id,
+        semilla: 0,
+        inicio: this.inicio,
+        jugadores: [...this.nombres],
+        entradas: this.entradas,
+        ganador: this.estado.winner,
+        motivo: this.estado.loss,
+      };
+    }
+    this.salirDeLaRed();
+    this.modo = "repeticion";
+    this.yo = 0;
+    this.nombres = [rep.jugadores[0] || "Jugador 1", rep.jugadores[1] || "Jugador 2"];
+    this.mundo = createWorld(POOL_9FT, rep.inicio);
+    this.estado = bola8.newGame(0);
+    this.repeticion = { rep, i: 0, reglas: this.estado, huellasOk: true };
+    this.turnoVence = null;
+    this.mostrarRepeticion(false);
+    this.aviso("Repetición");
+    this.redibujar();
+    setTimeout(() => this.siguienteDeRepeticion(), 800);
+  }
+
+  private siguienteDeRepeticion(): void {
+    const r = this.repeticion;
+    if (!r || this.modo !== "repeticion") return;
+    const e = r.rep.entradas[r.i++];
+    if (!e) {
+      this.fase = "fin";
+      this.aviso(
+        `Fin de la repetición.${r.huellasOk ? " Todas las huellas coinciden con el servidor." : ""}`,
+      );
+      this.mostrarRepeticion(true);
+      this.redibujar();
+      return;
+    }
+    if (e.tipo !== "tiro") {
+      this.estado =
+        e.tipo === "tiempo" ? bola8.timeoutFoul(this.estado) : bola8.forfeit(this.estado, e.jugador);
+      this.aviso(`${this.nombres[e.jugador]}: ${e.tipo === "tiempo" ? "se acabó el tiempo" : "abandonó"}`);
+      this.redibujar();
+      setTimeout(() => this.siguienteDeRepeticion(), 1200);
+      return;
+    }
+    if (e.blanca) bola8.placeCueBall(this.mundo, this.estado.ballInHand, e.blanca.x, e.blanca.y);
+    this.angulo = e.tiro.angle;
+    this.fase = "rival";
+    this.redibujar(true);
+    setTimeout(() => {
+      const antes = bola8.ballsOnTable(this.mundo);
+      const events = this.animar(e.tiro, () => {
+        if (worldHash(this.mundo) !== e.hash) r.huellasOk = false;
+        const v = bola8.judgeShot(this.estado, antes, events, e.cantar === null ? {} : { pocket: e.cantar });
+        for (const id of v.respot) bola8.spotBall(this.mundo, id);
+        this.estado = v.state;
+        this.fase = "rival";
+        this.aviso(
+          `${this.nombres[e.jugador]}${v.fouls.length ? ` · falta: ${v.fouls.map((f) => FALTAS[f]).join(", ")}` : ""}`,
+        );
+        this.redibujar();
+        setTimeout(() => this.siguienteDeRepeticion(), 700);
+      });
+    }, 600);
   }
 
   // ---------- Dibujo ----------
 
-  private cuadro(dt: number): void {
+  /** Avanza la animación según el reloj real, aunque el navegador dibuje pocos cuadros. */
+  private cuadro(): void {
     if (this.fase !== "animando" || !this.grabacion) return;
     const antes = this.reloj;
-    this.reloj += dt;
+    this.reloj = (performance.now() - this.inicioAnimacion) / 1000;
     for (const { e, t } of this.eventos) {
       if (t <= antes || t > this.reloj) continue;
       if (e.kind === "ball") this.sonido.choque(e.speed);
@@ -351,12 +782,24 @@ export class Juego {
     }
   }
 
-  private redibujar(verBot = false): void {
+  private relojTurno(): void {
+    const el = $("reloj");
+    if (this.turnoVence === null || this.modo !== "red" || this.fase === "fin") {
+      el.hidden = true;
+      return;
+    }
+    const s = Math.max(0, Math.ceil((this.turnoVence - performance.now()) / 1000));
+    el.hidden = false;
+    el.textContent = `${s} s`;
+    el.classList.toggle("poco", s <= 10);
+  }
+
+  private redibujar(verRival = false): void {
     if (!this.mundo) return;
     if (this.fase === "animando" && this.grabacion) return;
     this.vista.ponerBolas(this.mundo.balls);
     const c = this.blanca;
-    const apuntando = this.miTurno || verBot;
+    const apuntando = this.miTurno || verRival;
     const visibles = this.mundo.balls.filter((b) => b.onTable && b.id !== 0);
     this.vista.dibujarGuia(c, apuntando && c.onTable ? trazarGuia(POOL_9FT, c, this.angulo, visibles) : null);
     this.vista.dibujarTaco(apuntando && c.onTable ? c : null, this.angulo, this.potencia);
@@ -376,6 +819,9 @@ export class Juego {
     for (const p of [0, 1] as const) {
       const el = $(`j${p}`);
       el.classList.toggle("activo", this.estado.turn === p && this.fase !== "fin");
+      el.classList.toggle("caido", !this.conectados[p]);
+      $(`j${p}-nombre`).textContent =
+        this.modo === "red" && p === this.yo ? `${this.nombres[p]} (tú)` : this.nombres[p];
       const g = this.estado.groups[p];
       const bolas = $(`j${p}-bolas`);
       bolas.replaceChildren();
