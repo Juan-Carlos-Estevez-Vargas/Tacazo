@@ -18,3 +18,4 @@ se descartó. Así, dentro de un año, se entiende por qué el proyecto es como 
 | --- | --- | --- |
 | [0001](0001-partir-de-la-plantilla.md) | Partir de la plantilla de proyectos | Aceptada |
 | [0002](0002-monorepo-typescript.md) | Monorepo TypeScript con motor compartido | Aceptada |
+| [0003](0003-websocket-sin-colyseus.md) | Servidor de partidas con `ws`, sin Colyseus | Aceptada |

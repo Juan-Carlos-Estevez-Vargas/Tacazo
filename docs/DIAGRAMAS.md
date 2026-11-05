@@ -62,6 +62,7 @@ stateDiagram-v2
   Esperando --> Saque: llegan los 2 jugadores
   Saque --> Turno
   Turno --> Simulando: tiro válido
+  Turno --> Turno: se acaba el reloj (falta, bola en mano)
   Simulando --> Turno: sigue la partida
   Simulando --> Terminada: alguien gana
   Turno --> EsperaReconexion: jugador desconectado
