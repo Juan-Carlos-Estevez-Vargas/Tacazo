@@ -115,6 +115,21 @@ Migraciones en `apps/api/migraciones/`. Seguridad por fila: con el rol
 perfil; `tacazo_partidas` (el servidor de partidas) guarda partidas y ratings.
 Detalle en [ADR 0004](adr/0004-postgres-migraciones-rls.md).
 
+## Moderación
+
+```mermaid
+flowchart TD
+  P["Partidas clasificatorias<br/>(repeticiones)"] --> N["Trabajo nocturno<br/>señales"]
+  R["Reportes de jugadores"] --> N
+  N -- "puntaje ≥ umbral o 3 autores" --> C["Caso pendiente"]
+  C --> M{"Moderación revisa<br/>las repeticiones"}
+  M -- "limpio" --> L["Caso cerrado"]
+  M -- "sanción" --> S["Siguiente escalón<br/>aviso · 1 día · 7 días · cierre"]
+  S --> A{"Apelación<br/>en 14 días"}
+  A -- "aceptada" --> X["Sanción levantada"]
+  A -- "rechazada" --> S2["Sanción sigue"]
+```
+
 ## Inicio de sesión y permisos
 
 ```mermaid

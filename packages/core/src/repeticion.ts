@@ -1,4 +1,12 @@
-import { createWorld, simulateShot, worldHash, type BallInit, type Shot, type World } from "./physics.js";
+import {
+  createWorld,
+  simulateShot,
+  worldHash,
+  type BallInit,
+  type Shot,
+  type SimEvent,
+  type World,
+} from "./physics.js";
 import * as bola8 from "./reglas/bola8.js";
 import { POOL_9FT, type TableSpec } from "./table.js";
 
@@ -14,6 +22,8 @@ export type EntradaRepeticion =
       readonly blanca: { readonly x: number; readonly y: number } | null;
       /** Huella del mundo justo después del tiro (antes de reponer bolas). */
       readonly hash: string;
+      /** Milisegundos del turno usados antes de tirar (para las señales anti-trampas). */
+      readonly ms?: number;
     }
   | { readonly tipo: "tiempo"; readonly jugador: Jugador }
   | { readonly tipo: "abandono"; readonly jugador: Jugador };
@@ -44,6 +54,9 @@ export interface PasoRepeticion {
   readonly reglas: bola8.Bola8State;
   /** Huella recalculada (solo en tiros). */
   readonly hash: string | null;
+  /** Lo que pasó en el tiro y cuántos pasos de física duró (vacío si no fue tiro). */
+  readonly eventos: readonly SimEvent[];
+  readonly pasos: number;
   readonly coincide: boolean;
 }
 
@@ -62,12 +75,12 @@ export function* reproducir(
   for (const e of rep.entradas) {
     if (e.tipo === "tiempo") {
       reglas = bola8.timeoutFoul(reglas);
-      yield { entrada: e, reglas, hash: null, coincide: true };
+      yield { entrada: e, reglas, hash: null, eventos: [], pasos: 0, coincide: true };
       continue;
     }
     if (e.tipo === "abandono") {
       reglas = bola8.forfeit(reglas, e.jugador);
-      yield { entrada: e, reglas, hash: null, coincide: true };
+      yield { entrada: e, reglas, hash: null, eventos: [], pasos: 0, coincide: true };
       continue;
     }
     if (e.blanca) bola8.placeCueBall(w, reglas.ballInHand, e.blanca.x, e.blanca.y);
@@ -78,7 +91,7 @@ export function* reproducir(
     const hash = worldHash(w);
     for (const id of v.respot) bola8.spotBall(w, id);
     reglas = v.state;
-    yield { entrada: e, reglas, hash, coincide: hash === e.hash };
+    yield { entrada: e, reglas, hash, eventos: res.events, pasos: res.steps, coincide: hash === e.hash };
   }
 }
 
