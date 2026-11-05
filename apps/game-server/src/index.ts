@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { ENGINE_VERSION } from "@tacazo/core";
+import { basePg } from "@tacazo/api/db";
+import { datosPg } from "@tacazo/api/partidas";
 import { ServidorPartidas } from "./servidor.js";
 
 const produccion = process.env.NODE_ENV === "production";
@@ -18,9 +20,15 @@ const origenes = (process.env.TACAZO_ORIGENES ?? "http://localhost:5173,http://l
   .filter(Boolean);
 const puerto = Number(process.env.PUERTO ?? 2567);
 
-const servidor = new ServidorPartidas({ secreto, origenes });
+// Sin base de datos solo hay partidas con amigos; la cola clasificatoria la necesita.
+const url = process.env.DATABASE_URL;
+if (!url) console.warn("Sin DATABASE_URL: la cola clasificatoria queda apagada.");
+const datos = url ? datosPg(await basePg(url)) : null;
+
+const servidor = new ServidorPartidas({ secreto, origenes, datos });
 const p = await servidor.escuchar(puerto);
 setInterval(() => servidor.limpiar(), 60_000).unref();
+setInterval(() => servidor.emparejar(), 1_000).unref();
 console.log(`Servidor de partidas Tacazo · motor v${ENGINE_VERSION} · puerto ${p}`);
 
 const apagar = () => void servidor.cerrar().then(() => process.exit(0));

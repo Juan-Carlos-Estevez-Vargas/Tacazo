@@ -144,6 +144,19 @@ describe("invitados y cuentas", () => {
     expect((await pedir("GET", "/yo")).statusCode).toBe(401);
   });
 
+  it("da un token corto para el servidor de partidas, también a cuentas", async () => {
+    const yo = await invitado("Juego");
+    const r = await pedir("POST", "/sesion-juego", yo.token);
+    const { token, jugador } = r.json() as { token: string; jugador: string };
+    expect(jugador).toBe(yo.jugador);
+    expect(leerInvitado(token, SECRETO, Date.now())).toBe(yo.jugador);
+    expect(leerInvitado(token, SECRETO, Date.now() + 3 * 3_600_000)).toBeNull();
+    const jwt = await firmar("cuenta-juego");
+    await pedir("POST", "/cuenta/vincular", yo.token, { jwt });
+    expect((await pedir("POST", "/sesion-juego", jwt)).json()).toMatchObject({ jugador: yo.jugador });
+    expect((await pedir("POST", "/sesion-juego")).statusCode).toBe(401);
+  });
+
   it("solo edita su propio perfil, con datos válidos", async () => {
     const { token } = await invitado("Dani");
     const r = await pedir("PATCH", "/yo", token, { nombre: "  Dani  P ", pais: null, region: "eu" });

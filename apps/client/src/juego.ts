@@ -22,6 +22,7 @@ import type { FederatedPointerEvent } from "pixi.js";
 import { trazarGuia } from "./guia.js";
 import { BOLAS_POOL } from "./marca.js";
 import { VistaMesa, type PuntoMesa } from "./mesa.js";
+import { buscarRival, hayInvitado, invitado, sesionJuego } from "./cuenta.js";
 import { Red, asientoGuardado, crearSala, unirseSala, urlServidor, type Asiento } from "./red.js";
 import { Grabacion, eventosEnTiempo } from "./reproduccion.js";
 import { Sonido } from "./sonido.js";
@@ -186,6 +187,64 @@ export class Juego {
       this.mostrarEnlace(a.sala);
     } catch (e) {
       this.aviso(e instanceof Error ? e.message : "No se pudo crear la partida");
+    }
+  }
+
+  private cancelarBusqueda: (() => void) | null = null;
+
+  /** Entra a la cola clasificatoria y, al encontrar rival, se sienta en la sala. */
+  async jugarClasificatoria(): Promise<void> {
+    if (this.cancelarBusqueda) return;
+    let nombre = "Invitado";
+    if (!hayInvitado()) {
+      const n = await this.pedirNombre("Partida clasificatoria");
+      if (n === null) return;
+      nombre = n;
+    }
+    const panel = $("buscando");
+    const texto = $("buscando-texto");
+    const terminar = () => {
+      this.cancelarBusqueda = null;
+      panel.hidden = true;
+    };
+    try {
+      texto.textContent = "Preparando tu jugador…";
+      panel.hidden = false;
+      this.cancelarBusqueda = terminar;
+      const yo = await invitado(nombre);
+      const token = await sesionJuego(yo);
+      if (!this.cancelarBusqueda) return;
+      const inicio = performance.now();
+      this.cancelarBusqueda = (() => {
+        const cancelar = buscarRival(
+          token,
+          (e) => {
+            if (e.estado === "buscando") {
+              const s = Math.round((performance.now() - inicio) / 1000);
+              texto.textContent = `Buscando rival de tu nivel… ${s} s`;
+              return;
+            }
+            terminar();
+            const a = { sala: e.sala, jugador: e.jugador, token: e.token };
+            asientoGuardado.guardar(a);
+            history.replaceState(null, "", `${location.pathname}?sala=${encodeURIComponent(a.sala)}`);
+            $("enlace").hidden = true;
+            this.conectarA(a);
+            this.aviso(`Rival encontrado: ${e.rival}`);
+          },
+          (motivo) => {
+            terminar();
+            this.aviso(motivo);
+          },
+        );
+        return () => {
+          cancelar();
+          terminar();
+        };
+      })();
+    } catch (e) {
+      terminar();
+      this.aviso(e instanceof Error ? e.message : "No se pudo buscar rival");
     }
   }
 
@@ -438,6 +497,8 @@ export class Juego {
         if (n !== null) void this.jugarConAmigo(n);
       });
     });
+    $("clasificatoria").addEventListener("click", () => void this.jugarClasificatoria());
+    $("cancelar-busqueda").addEventListener("click", () => this.cancelarBusqueda?.());
     $("ver-repeticion").addEventListener("click", () => void this.verRepeticion());
     $("copiar-enlace").addEventListener("click", () => {
       const url = $<HTMLInputElement>("enlace-url").value;

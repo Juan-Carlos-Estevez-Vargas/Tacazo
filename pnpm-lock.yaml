@@ -78,6 +78,9 @@ importers:
 
   apps/game-server:
     dependencies:
+      '@tacazo/api':
+        specifier: workspace:*
+        version: link:../api
       '@tacazo/core':
         specifier: workspace:*
         version: link:../../packages/core

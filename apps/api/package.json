@@ -3,6 +3,32 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./cuentas": {
+      "types": "./dist/cuentas.d.ts",
+      "default": "./dist/cuentas.js"
+    },
+    "./db": {
+      "types": "./dist/db.d.ts",
+      "default": "./dist/db.js"
+    },
+    "./migrar": {
+      "types": "./dist/migrar.d.ts",
+      "default": "./dist/migrar.js"
+    },
+    "./moderacion": {
+      "types": "./dist/moderacion.d.ts",
+      "default": "./dist/moderacion.js"
+    },
+    "./partidas": {
+      "types": "./dist/partidas.d.ts",
+      "default": "./dist/partidas.js"
+    },
+    "./prueba-db": {
+      "types": "./dist/prueba-db.d.ts",
+      "default": "./dist/prueba-db.js"
+    }
+  },
   "scripts": {
     "build": "tsc -b",
     "migrar": "tsc -b && node dist/cli-migrar.js",

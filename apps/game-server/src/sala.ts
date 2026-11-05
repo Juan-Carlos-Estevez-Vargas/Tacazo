@@ -70,6 +70,8 @@ export class Sala {
   private cancelarTurno: (() => void) | null = null;
   readonly creada: number;
   terminadaEn: number | null = null;
+  /** Se llama una vez cuando la partida termina (para guardar las clasificatorias). */
+  alTerminar: ((s: Sala) => void) | null = null;
 
   constructor(
     readonly id: string,
@@ -235,6 +237,7 @@ export class Sala {
   }
 
   private terminar(): void {
+    if (this.fase === "terminada") return;
     this.fase = "terminada";
     this.terminadaEn = this.reloj.ahora();
     this.cancelarTurno?.();
@@ -244,6 +247,12 @@ export class Sala {
       s?.cancelarEspera?.();
       if (s) s.cancelarEspera = null;
     }
+    this.alTerminar?.(this);
+  }
+
+  /** Ganador (0 o 1) si la partida terminó con uno. */
+  get ganador(): Jugador | null {
+    return this.reglas.winner;
   }
 
   private otro(j: Jugador): Silla | null {
