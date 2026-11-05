@@ -33,7 +33,7 @@ export const comoModeracion = <T>(base: Base, fn: (c: Consulta) => Promise<T>) =
 export async function reportar(
   c: Consulta,
   autor: string,
-  r: { partida: string; reportado: string; motivo: MotivoReporte; detalle?: string },
+  r: { partida: string; reportado: string; motivo: MotivoReporte; detalle?: string | undefined },
 ): Promise<string> {
   if (!MOTIVOS.includes(r.motivo)) throw new Error("Motivo inválido");
   const detalle = r.detalle?.trim().slice(0, 500) || null;

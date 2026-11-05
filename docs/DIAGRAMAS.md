@@ -134,16 +134,27 @@ flowchart TD
 
 ```mermaid
 sequenceDiagram
-  actor U as Usuario
-  participant FE as Frontend
-  participant API as Backend
-  U->>FE: correo y contraseña
-  FE->>API: iniciar sesión
-  API-->>FE: sesión (cookie HttpOnly / token)
-  FE->>API: petición con la sesión
-  API->>API: valida permisos
-  API-->>FE: datos permitidos
+  actor U as Jugador
+  participant C as Cliente
+  participant API as apps/api
+  participant NA as Neon Auth
+  U->>C: abre Tacazo por primera vez
+  C->>API: POST /invitados (nombre, Turnstile)
+  API-->>C: jugador + token de invitado (1 año)
+  Note over C,API: juega como invitado con su token
+  U->>C: «Guardar mi progreso»
+  C->>NA: inicia sesión con Google o correo
+  NA-->>C: JWT (EdDSA, 15 min)
+  C->>API: POST /cuenta/vincular (token de invitado + JWT)
+  API->>NA: JWKS para verificar la firma
+  API-->>C: mismo jugador, ahora con cuenta
+  C->>API: peticiones con el JWT
+  API->>API: SET LOCAL ROLE tacazo_api y app.jugador
 ```
+
+La base decide qué ve cada jugador con seguridad por fila
+([ADR 0004](adr/0004-postgres-migraciones-rls.md)); las cuentas, en
+[ADR 0005](adr/0005-neon-auth.md).
 
 ## Integración y despliegue
 
