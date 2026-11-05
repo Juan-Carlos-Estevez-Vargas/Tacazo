@@ -7,7 +7,7 @@ cómo se juega cada uno y en qué fase llega.
 
 | Modo | Mesa | Fase | Estado |
 | --- | --- | --- | --- |
-| Bola 8 | Pool de 9 pies, 6 troneras | 1 | Por hacer |
+| Bola 8 | Pool de 9 pies, 6 troneras | 1 | Reglas y bot listos; falta la mesa jugable (#15) |
 | Bola 9 | Pool de 9 pies | 7 | Por hacer |
 | Bola 10 | Pool de 9 pies | 7 | Por hacer |
 | Carambola libre | Carambola de 2,84 m, sin troneras | 8 | Por hacer |
@@ -30,7 +30,41 @@ motor de reglas propio. El rating y las salas son por modo.
 ## Reglas
 
 Las reglas se escriben aquí cuando se implementa cada modo, con un enlace a
-sus pruebas. Bola 8 llega con #14.
+sus pruebas.
+
+### Bola 8
+
+Código: `packages/core/src/reglas/bola8.ts`. Pruebas: `bola8.test.ts`, una por
+falta. Las reglas no simulan nada: reciben los eventos de la física (choques,
+bandas, troneras) y deciden faltas, turno y ganador.
+
+| Situación | Qué pasa |
+| --- | --- |
+| Saque | Blanca en la cabecera. Es legal si cae una bola o al menos 4 bolas tocan banda. Después del saque la mesa sigue abierta |
+| Saque ilegal o blanca en tronera en el saque | Turno al rival con bola en mano detrás de la línea de cabecera |
+| La 8 cae en el saque | Vuelve al punto de pie; no se pierde |
+| Mesa abierta | Se puede tocar primero cualquier bola menos la 8. La primera bola metida sin falta decide el grupo (lisas 1-7 o rayadas 9-15) |
+| Sigue tirando | Si mete una de su grupo sin falta |
+| Faltas | Blanca en tronera, no tocar ninguna bola, tocar primero una bola que no es suya, o que tras el contacto nada caiga ni toque banda |
+| Después de una falta | Turno al rival con bola en mano en cualquier lugar |
+| La 8 | Cuando ya no quedan bolas de su grupo. Hay que cantar la tronera |
+| Gana | Mete la 8 en la tronera cantada sin falta |
+| Pierde | Mete la 8 antes de tiempo, en otra tronera, sin cantar o con falta |
+
+### Bot de práctica
+
+Código: `packages/core/src/bot.ts`. Busca tiros con la bola fantasma, simula
+los candidatos con el mismo motor y elige el mejor según las reglas. Con bola
+en mano deja la blanca detrás de un tiro recto.
+
+| Nivel | Tiros que prueba | Error de puntería |
+| --- | --- | --- |
+| Fácil | 6 | ±2,5° |
+| Medio | 18 | ±0,8° |
+| Difícil | 40 | ±0,15° |
+
+Es determinista: con la misma semilla juega igual. Las pruebas juegan partidas
+enteras y comprueban que el difícil le gana al fácil.
 
 ## Turno
 
