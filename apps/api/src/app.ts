@@ -73,6 +73,9 @@ const esquemas = {
   apelacion: z.strictObject({ texto: z.string().max(1000) }),
 };
 
+/** Vida del token para el servidor de partidas. */
+export const SESION_JUEGO_MS = 2 * 60 * 60 * 1000;
+
 class ErrorApi extends Error {
   constructor(
     readonly estado: number,
@@ -157,6 +160,15 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
     const cuenta = await o.verificarCuenta(jwt);
     if (!cuenta) throw new ErrorApi(401, "cuenta", "No pudimos verificar la cuenta");
     return vincular(o.base, invitado, cuenta);
+  });
+
+  /**
+   * Token corto para el servidor de partidas (cola clasificatoria). Sirve igual
+   * para invitados y para cuentas: el servidor solo necesita saber qué jugador es.
+   */
+  app.post("/sesion-juego", async (req) => {
+    const j = await quien(req);
+    return { jugador: j, token: firmarInvitado(j, ahora() + SESION_JUEGO_MS, o.secreto) };
   });
 
   app.get("/yo", async (req) => {

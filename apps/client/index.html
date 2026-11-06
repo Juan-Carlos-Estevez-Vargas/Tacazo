@@ -9,6 +9,8 @@
     <meta name="theme-color" content="#0B1512" />
     <!-- Servidor de partidas; vacío = mismo host, puerto 2567. -->
     <meta name="tacazo-servidor" content="" />
+    <meta name="tacazo-api" content="" />
+    <meta name="tacazo-turnstile" content="" />
     <style>
       :root {
         --pano: #0e5a45;
@@ -135,6 +137,7 @@
         padding: 2px 10px;
       }
       #enlace,
+      #buscando,
       #version {
         display: flex;
         gap: 8px;
@@ -144,6 +147,7 @@
         font-size: 13px;
       }
       #enlace[hidden],
+      #buscando[hidden],
       #version[hidden] {
         display: none;
       }
@@ -348,6 +352,11 @@
         <input id="enlace-url" readonly aria-label="Enlace de la partida" />
         <button id="copiar-enlace" type="button">Copiar enlace</button>
       </div>
+      <div id="buscando" hidden>
+        <span id="buscando-texto" role="status" aria-live="polite">Buscando rival…</span>
+        <button id="cancelar-busqueda" type="button">Cancelar</button>
+        <div id="turnstile" hidden></div>
+      </div>
       <div id="version" hidden role="alert">
         Hay una versión nueva de Tacazo. <button type="button" onclick="location.reload()">Actualizar</button>
       </div>
@@ -376,6 +385,7 @@
         </select>
         <button id="nueva" type="button">Contra el bot</button>
         <button id="amigo" type="button">Jugar con un amigo</button>
+        <button id="clasificatoria" type="button">Clasificatoria</button>
         <button id="sonido" type="button" aria-pressed="false">Sonido: sí</button>
       </footer>
     </div>

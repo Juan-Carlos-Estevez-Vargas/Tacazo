@@ -7,7 +7,10 @@ import {
   leerMensajeCliente,
   type MensajeServidor,
 } from "@tacazo/core";
+import { leerInvitado } from "@tacazo/api/cuentas";
+import type { Datos } from "@tacazo/api/partidas";
 import { WebSocketServer, type WebSocket } from "ws";
+import { Colas } from "./emparejamiento.js";
 import { Cubeta, LimitePorClave } from "./limite.js";
 import { Sala, relojReal, type Conexion, type Reloj } from "./sala.js";
 import { firmarToken, leerToken } from "./token.js";
@@ -17,7 +20,39 @@ export interface Config {
   /** Orígenes del navegador permitidos (CORS y WebSocket). */
   readonly origenes: readonly string[];
   readonly reloj?: Reloj;
+  /** Base de datos para la cola clasificatoria; sin ella solo hay partidas con amigos. */
+  readonly datos?: Datos | null;
 }
+
+const emparejado = (e: Extract<EstadoCola, { tipo: "emparejado" }>) => ({
+  estado: "emparejado",
+  sala: e.sala,
+  jugador: e.jugador,
+  token: e.token,
+  rival: e.rival,
+});
+
+/** Modos y salas con cola clasificatoria. Las salas por nivel llegan con la economía. */
+export const MODOS_COLA = ["bola8"] as const;
+export const SALAS_COLA = ["barrio"] as const;
+/** Quien deja de preguntar por su búsqueda durante este tiempo sale de la cola. */
+export const COLA_SIN_VER_MS = 10_000;
+
+type EstadoCola =
+  | {
+      readonly tipo: "buscando";
+      readonly modo: (typeof MODOS_COLA)[number];
+      readonly sala: string;
+      readonly nombre: string;
+      visto: number;
+    }
+  | {
+      readonly tipo: "emparejado";
+      readonly sala: string;
+      readonly jugador: 0 | 1;
+      readonly token: string;
+      readonly rival: string;
+    };
 
 /** Versión mínima del protocolo que acepta el servidor. */
 export const CLIENTE_MINIMO = PROTOCOLO;
@@ -74,6 +109,13 @@ export class ServidorPartidas {
   private readonly ws: WebSocketServer;
   private readonly reloj: Reloj;
   private readonly crearPorIp = new LimitePorClave(20, 60_000);
+  readonly colas = new Colas();
+  private readonly enCola = new Map<string, EstadoCola>();
+  /** Partidas guardadas en la base: quién se sentó en cada silla. */
+  private readonly clasificatorias = new Map<
+    string,
+    { modo: (typeof MODOS_COLA)[number]; a: string; b: string; sala: string }
+  >();
 
   constructor(private readonly config: Config) {
     this.reloj = config.reloj ?? relojReal;
@@ -118,6 +160,137 @@ export class ServidorPartidas {
     }
   }
 
+  /** Jugador de la petición según su token de la API (`Authorization: Bearer inv.…`). */
+  private jugadorDe(req: IncomingMessage): string | null {
+    const h = req.headers.authorization;
+    if (!h?.startsWith("Bearer ")) return null;
+    return leerInvitado(h.slice(7).trim(), this.config.secreto, this.reloj.ahora());
+  }
+
+  private async atenderCola(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const datos = this.config.datos;
+    if (!datos) return this.responder(req, res, 503, { error: "La cola clasificatoria no está disponible" });
+    const j = this.jugadorDe(req);
+    if (!j) return this.responder(req, res, 401, { error: "Inicia sesión para jugar clasificatorias" });
+    const ahora = this.reloj.ahora();
+    const actual = this.enCola.get(j);
+
+    if (req.method === "GET") {
+      if (!actual) return this.responder(req, res, 200, { estado: "nada" });
+      if (actual.tipo === "buscando") {
+        actual.visto = ahora;
+        return this.responder(req, res, 200, { estado: "buscando" });
+      }
+      return this.responder(req, res, 200, emparejado(actual));
+    }
+
+    if (req.method === "DELETE") {
+      if (actual?.tipo === "buscando") {
+        this.colas.salir(j);
+        this.enCola.delete(j);
+      }
+      return this.responder(req, res, 200, { estado: actual?.tipo === "emparejado" ? "emparejado" : "nada" });
+    }
+
+    if (req.method !== "POST") return this.responder(req, res, 405, { error: "Método no permitido" });
+    const cuerpo = (await leerCuerpo(req)) as Record<string, unknown>;
+    const modo = MODOS_COLA.find((m) => m === cuerpo.modo);
+    const sala = SALAS_COLA.find((x) => x === cuerpo.sala);
+    if (!modo || !sala) return this.responder(req, res, 400, { error: "Modo o sala inválidos" });
+    if (actual?.tipo === "emparejado" && this.salas.get(actual.sala)?.estadoFase !== "terminada") {
+      return this.responder(req, res, 200, emparejado(actual));
+    }
+    const perfil = await datos.perfil(j, modo);
+    if (!perfil) return this.responder(req, res, 401, { error: "No encontramos tu jugador" });
+    if (!perfil.juega)
+      return this.responder(req, res, 403, { error: "Tienes una sanción que no te deja jugar" });
+    if (!perfil.clasifica)
+      return this.responder(req, res, 403, {
+        error: "Tienes una sanción que no te deja jugar clasificatorias",
+      });
+    this.colas.salir(j);
+    this.colas.cola(modo, sala).entrar({
+      id: j,
+      rating: perfil.rating,
+      region: perfil.region,
+      recientes: perfil.recientes,
+      desde: ahora,
+    });
+    this.enCola.set(j, { tipo: "buscando", modo, sala, nombre: limpiarNombre(perfil.nombre), visto: ahora });
+    return this.responder(req, res, 202, { estado: "buscando" });
+  }
+
+  /** Forma parejas en las colas y les crea la sala. Se llama cada segundo. */
+  emparejar(): number {
+    const ahora = this.reloj.ahora();
+    for (const [j, e] of this.enCola) {
+      if (e.tipo === "buscando" && ahora - e.visto > COLA_SIN_VER_MS) {
+        this.colas.salir(j);
+        this.enCola.delete(j);
+      }
+    }
+    let n = 0;
+    for (const { modo, sala: nivel, pareja } of this.colas.emparejar(ahora)) {
+      const ea = this.enCola.get(pareja.a.id);
+      const eb = this.enCola.get(pareja.b.id);
+      if (ea?.tipo !== "buscando" || eb?.tipo !== "buscando") continue;
+      const id = randomBytes(9).toString("base64url");
+      const sala = new Sala(id, randomInt(0, 2 ** 32), this.reloj);
+      // Saca primero quien más esperó (pareja.a).
+      sala.sentar(0, ea.nombre);
+      sala.sentar(1, eb.nombre);
+      this.salas.set(id, sala);
+      const m = MODOS_COLA.find((x) => x === modo)!;
+      this.clasificatorias.set(id, { modo: m, a: pareja.a.id, b: pareja.b.id, sala: nivel });
+      sala.alTerminar = (s) => this.guardarClasificatoria(s);
+      this.enCola.set(pareja.a.id, {
+        tipo: "emparejado",
+        sala: id,
+        jugador: 0,
+        token: this.token(id, 0, ea.nombre),
+        rival: eb.nombre,
+      });
+      this.enCola.set(pareja.b.id, {
+        tipo: "emparejado",
+        sala: id,
+        jugador: 1,
+        token: this.token(id, 1, eb.nombre),
+        rival: ea.nombre,
+      });
+      n++;
+    }
+    return n;
+  }
+
+  /** Promesas de guardado pendientes (las pruebas las esperan). */
+  readonly guardando = new Set<Promise<void>>();
+
+  private guardarClasificatoria(s: Sala): void {
+    const meta = this.clasificatorias.get(s.id);
+    const datos = this.config.datos;
+    if (!meta || !datos) return;
+    this.clasificatorias.delete(s.id);
+    for (const j of [meta.a, meta.b]) {
+      const e = this.enCola.get(j);
+      if (e?.tipo === "emparejado" && e.sala === s.id) this.enCola.delete(j);
+    }
+    const rep = s.repeticion();
+    const ganador = s.ganador === null ? null : s.ganador === 0 ? meta.a : meta.b;
+    const p = datos
+      .guardar({
+        modo: meta.modo,
+        sala: meta.sala,
+        a: meta.a,
+        b: meta.b,
+        ganador,
+        motivo: rep.motivo,
+        repeticion: rep,
+      })
+      .catch((e: unknown) => console.error("No se pudo guardar la partida", s.id, e))
+      .finally(() => this.guardando.delete(p));
+    this.guardando.add(p);
+  }
+
   private origenPermitido(origen: string | undefined): boolean {
     // Clientes nativos (sin Origin) se permiten; el token sigue siendo obligatorio.
     return origen === undefined || this.config.origenes.includes(origen);
@@ -149,8 +322,8 @@ export class ServidorPartidas {
         const origen = req.headers.origin;
         if (origen && this.config.origenes.includes(origen)) {
           res.setHeader("Access-Control-Allow-Origin", origen);
-          res.setHeader("Access-Control-Allow-Methods", "GET, POST");
-          res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+          res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE");
+          res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
           res.setHeader("Access-Control-Max-Age", "600");
           res.setHeader("Vary", "Origin");
         }
@@ -173,6 +346,8 @@ export class ServidorPartidas {
         this.salas.set(id, sala);
         return this.responder(req, res, 201, { sala: id, jugador: 0, token: this.token(id, 0, nombre) });
       }
+
+      if (url.pathname === "/cola") return await this.atenderCola(req, res);
 
       if (partes[0] === "salas" && partes[1] && partes.length === 3) {
         const sala = this.salas.get(partes[1]);

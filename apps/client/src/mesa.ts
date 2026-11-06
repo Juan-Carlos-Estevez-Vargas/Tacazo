@@ -47,7 +47,12 @@ export class VistaMesa {
     this.app.stage.eventMode = "static";
     this.app.stage.hitArea = this.app.screen;
     this.ajustar();
-    new ResizeObserver(() => this.ajustar()).observe(contenedor);
+    // Pixi solo se redimensiona con la ventana; si cambia el contenedor (por
+    // ejemplo, aparece un aviso arriba) hay que pedírselo.
+    new ResizeObserver(() => {
+      this.app.resize();
+      this.ajustar();
+    }).observe(contenedor);
     this.app.ticker.add((t) => this.animarPolvo(t.deltaMS / 1000));
   }
 

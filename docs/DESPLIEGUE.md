@@ -11,11 +11,12 @@
 
 | Variable | Dónde va | Pública | Para qué |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | API y trabajo nocturno | no | Conexión a PostgreSQL (Neon) con el usuario dueño |
+| `DATABASE_URL` | API, servidor de partidas y trabajo nocturno | no | Conexión a PostgreSQL (Neon) con el usuario dueño |
 | `NEON_AUTH_URL` | API y cliente | sí | URL de Neon Auth, por ejemplo `https://ep-x.aws.neon.tech/neondb/auth` |
-| `TACAZO_SECRETO` | API y servidor de partidas | no | Firma tokens de invitado y de partida. 32 bytes al azar |
+| `TACAZO_SECRETO` | API y servidor de partidas | no | Firma tokens de invitado y de partida. 32 bytes al azar; **el mismo** en la API y el servidor de partidas |
 | `TURNSTILE_SECRETO` | API | no | Clave secreta de Turnstile; obligatoria en producción |
-| `TURNSTILE_SITIO` | Cliente | sí | Clave pública de Turnstile |
+| `TURNSTILE_SITIO` | Cliente (`meta tacazo-turnstile`) | sí | Clave pública de Turnstile |
+| URL de la API y del servidor | Cliente (`meta tacazo-api` y `meta tacazo-servidor`) | sí | Sin ellas, el cliente usa los puertos 3000 y 2567 del mismo host |
 | `TACAZO_ORIGENES` | API y servidor de partidas | sí | Orígenes permitidos (CORS y WebSocket), separados por comas |
 | `TACAZO_UMBRALES` | Trabajo nocturno | no | Umbrales anti-trampas en JSON ([MODERACION.md](MODERACION.md)) |
 | `PUERTO` | API (3000) y servidor de partidas (2567) | sí | Puerto HTTP |

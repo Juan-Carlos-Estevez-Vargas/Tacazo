@@ -84,6 +84,24 @@ Código: `apps/game-server/src/emparejamiento.ts`. Hay una cola por modo y sala.
 | Rival repetido | Ninguno de los últimos 3 hasta esperar 60 s |
 | Prioridad | Primero quien más espera; se elige el rating más parecido |
 
+### Cómo se entra a la cola
+
+1. El cliente obtiene su invitado de la API (`POST /invitados`, con Turnstile)
+   y pide un token corto para jugar (`POST /sesion-juego`, 2 horas).
+2. `POST /cola` al servidor de partidas con `{ modo: "bola8", sala: "barrio" }`
+   y `Authorization: Bearer <token>`. El servidor lee el rating, la región, los
+   últimos 3 rivales y las sanciones del jugador en la base.
+3. El cliente pregunta con `GET /cola` cada 1,5 s. Quien deja de preguntar 10 s
+   sale de la cola. `DELETE /cola` cancela.
+4. Cada segundo el servidor forma parejas, crea la sala y responde
+   `emparejado` con la sala, la silla y el token de partida. Desde ahí sigue
+   igual que una partida con amigo.
+5. Al terminar, la partida y su repetición se guardan como clasificatoria y
+   se actualiza el rating de los dos.
+
+Sin `DATABASE_URL` el servidor funciona igual, pero solo con partidas con amigos.
+Quien tiene una sanción de nivel 2 o más no entra a la cola.
+
 ## Ranking (fase 3)
 
 Código: `apps/api/src/glicko2.ts` y `apps/api/src/ranking.ts`.
