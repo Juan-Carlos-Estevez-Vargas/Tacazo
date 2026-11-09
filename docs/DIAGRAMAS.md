@@ -160,6 +160,20 @@ sequenceDiagram
   end
 ```
 
+## Anuncios
+
+```mermaid
+flowchart TD
+  M["Llega a un menú<br/>(buscando rival o resultados)"] --> C{"¿Ya eligió<br/>en Privacidad?"}
+  C -- "no" --> P["Aviso: generales o según intereses<br/>(+ casilla de menor de edad)"]
+  P --> C
+  C -- "sí" --> T["Tarjeta pequeña y cerrable<br/>(no personalizada si es menor)"]
+  T -- "vuelve a la mesa" --> O["Tarjeta oculta"]
+```
+
+El anuncio con premio y su verificación en el servidor están en
+[ECONOMIA.md](ECONOMIA.md#cómo-está-hecho).
+
 ## Moderación
 
 ```mermaid

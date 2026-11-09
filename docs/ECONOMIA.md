@@ -94,7 +94,46 @@ monedas en circulación. Un neto positivo sostenido es inflación.
 | Anuncio con premio | Si el saldo no alcanza para la sala más barata, la persona puede elegir ver un anuncio y recibir monedas, con límite diario |
 | Premio verificado | Las monedas se acreditan solo cuando la red de anuncios confirma al servidor que se vio completo |
 | Privacidad | Consentimiento antes de cargar anuncios; permiso de rastreo en iOS; a menores solo anuncios no personalizados |
-| Redes | AdMob en las apps; API de anuncios para juegos de Google en la web |
+| Redes | AdSense en la web (tarjeta en menús); AdMob en las apps (tarjeta y anuncio con premio) |
+
+### Cómo está hecho
+
+- **Consentimiento** (`apps/client/src/anuncios.ts` y `politica-anuncios.ts`).
+  No se carga ningún script de anuncios hasta que la persona elige entre
+  «Anuncios generales» y «Según mis intereses». Se pregunta la primera vez
+  que llega a un menú, no al abrir el juego, y se cambia en **Privacidad**.
+  Quien marca «Tengo menos de 18 años» recibe siempre anuncios no
+  personalizados (`requestNonPersonalizedAds`). La elección lleva versión: si
+  cambia el texto, se vuelve a preguntar.
+- **Tarjeta**: `#anuncio`, de 60 a 100 px de alto, con la etiqueta
+  «Publicidad» y una ×. Se ve solo mientras se busca rival y con la partida
+  terminada. Al volver a la mesa se oculta. Sin las metas `tacazo-adsense` y
+  `tacazo-adsense-slot` no aparece nada, ni el botón Privacidad.
+- **Anuncio con premio** (`apps/api/src/anuncios.ts`): +50 monedas, máximo 3
+  por día de Colombia, y solo si el saldo no alcanza para la entrada más
+  barata (50). AdMob llama a `GET /anuncios/admob` firmado con ECDSA; el
+  servidor verifica la firma con las claves públicas de Google (guardadas
+  24 h) y acredita con la clave `anuncio:<transaction_id>`, así un reintento
+  de AdMob no paga dos veces. El `user_id` del anuncio es el id del jugador.
+- **En la web no hay anuncio con premio**: AdSense no avisa al servidor que el
+  anuncio se vio, así que no se puede verificar. El botón aparece solo dentro
+  de la app (puente `window.TacazoNativo.anuncioConPremio`, que llega con las
+  apps en la fase 6), junto con el permiso de rastreo de iOS.
+
+```mermaid
+sequenceDiagram
+  actor J as Jugador
+  participant App
+  participant AdMob
+  participant API as apps/api
+  J->>App: «Ver un anuncio y ganar 50»
+  App->>AdMob: anuncio con premio (user_id = jugador)
+  AdMob-->>J: anuncio completo
+  AdMob->>API: GET /anuncios/admob?…&signature&key_id
+  API->>API: verifica la firma, saldo < 50 y límite diario
+  API-->>AdMob: 200 (acreditado, repetido, límite…)
+  App->>API: GET /monedas hasta ver el saldo nuevo
+```
 
 ## Tienda (fase 10, más adelante)
 
