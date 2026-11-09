@@ -88,16 +88,22 @@ Código: `apps/game-server/src/emparejamiento.ts`. Hay una cola por modo y sala.
 
 1. El cliente obtiene su invitado de la API (`POST /invitados`, con Turnstile)
    y pide un token corto para jugar (`POST /sesion-juego`, 2 horas).
-2. `POST /cola` al servidor de partidas con `{ modo: "bola8", sala: "barrio" }`
-   y `Authorization: Bearer <token>`. El servidor lee el rating, la región, los
-   últimos 3 rivales y las sanciones del jugador en la base.
+2. `POST /cola` al servidor de partidas con `{ modo: "bola8", sala: "club" }`
+   (`barrio`, `club` o `campeonato`) y `Authorization: Bearer <token>`. El
+   servidor lee el rating, la región, los últimos 3 rivales, las sanciones y
+   el saldo del jugador; si no le alcanza para la entrada responde 409.
 3. El cliente pregunta con `GET /cola` cada 1,5 s. Quien deja de preguntar 10 s
    sale de la cola. `DELETE /cola` cancela.
-4. Cada segundo el servidor forma parejas, crea la sala y responde
-   `emparejado` con la sala, la silla y el token de partida. Desde ahí sigue
-   igual que una partida con amigo.
-5. Al terminar, la partida y su repetición se guardan como clasificatoria y
-   se actualiza el rating de los dos.
+4. Cada segundo el servidor forma parejas y cobra la entrada a los dos en una
+   transacción. Mientras cobra, el cliente sigue viendo `buscando`. Si a uno ya
+   no le alcanza, ese sale con `{ estado: "nada", motivo }` y el otro vuelve a
+   la cola sin perder su espera. Si alguien cancela durante el cobro, se
+   devuelven las dos entradas.
+5. Con el cobro hecho, crea la sala y responde `emparejado` con la sala, la
+   silla y el token de partida. Desde ahí sigue igual que una partida con amigo.
+6. Al terminar, la partida y su repetición se guardan como clasificatoria, se
+   actualiza el rating de los dos y se paga el premio al ganador (o se
+   devuelven las entradas si no hubo ganador). Montos en [ECONOMIA.md](ECONOMIA.md).
 
 Sin `DATABASE_URL` el servidor funciona igual, pero solo con partidas con amigos.
 Quien tiene una sanción de nivel 2 o más no entra a la cola.

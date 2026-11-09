@@ -8,9 +8,10 @@ import {
   type MensajeServidor,
 } from "@tacazo/core";
 import { leerInvitado } from "@tacazo/api/cuentas";
+import { salaPorId } from "@tacazo/api/monedas";
 import type { Datos } from "@tacazo/api/partidas";
 import { WebSocketServer, type WebSocket } from "ws";
-import { Colas } from "./emparejamiento.js";
+import { Colas, type EnCola } from "./emparejamiento.js";
 import { Cubeta, LimitePorClave } from "./limite.js";
 import { Sala, relojReal, type Conexion, type Reloj } from "./sala.js";
 import { firmarToken, leerToken } from "./token.js";
@@ -32,20 +33,26 @@ const emparejado = (e: Extract<EstadoCola, { tipo: "emparejado" }>) => ({
   rival: e.rival,
 });
 
-/** Modos y salas con cola clasificatoria. Las salas por nivel llegan con la economía. */
+/** Modos y salas con cola clasificatoria. Cada sala cobra su entrada en monedas. */
 export const MODOS_COLA = ["bola8"] as const;
-export const SALAS_COLA = ["barrio"] as const;
+export const SALAS_COLA = ["barrio", "club", "campeonato"] as const;
 /** Quien deja de preguntar por su búsqueda durante este tiempo sale de la cola. */
 export const COLA_SIN_VER_MS = 10_000;
 
+type Buscando = {
+  readonly tipo: "buscando";
+  readonly modo: (typeof MODOS_COLA)[number];
+  readonly sala: string;
+  readonly nombre: string;
+  visto: number;
+};
+
 type EstadoCola =
-  | {
-      readonly tipo: "buscando";
-      readonly modo: (typeof MODOS_COLA)[number];
-      readonly sala: string;
-      readonly nombre: string;
-      visto: number;
-    }
+  | Buscando
+  /** Ya tiene rival y se están cobrando las entradas; para el cliente sigue buscando. */
+  | { readonly tipo: "cobrando"; readonly antes: Buscando; cancelado: boolean }
+  /** Salió de la cola sin jugar; `motivo` se le muestra una vez. */
+  | { readonly tipo: "fuera"; readonly motivo: string }
   | {
       readonly tipo: "emparejado";
       readonly sala: string;
@@ -177,16 +184,25 @@ export class ServidorPartidas {
 
     if (req.method === "GET") {
       if (!actual) return this.responder(req, res, 200, { estado: "nada" });
-      if (actual.tipo === "buscando") {
-        actual.visto = ahora;
+      if (actual.tipo === "fuera") {
+        this.enCola.delete(j);
+        return this.responder(req, res, 200, { estado: "nada", motivo: actual.motivo });
+      }
+      if (actual.tipo === "buscando" || actual.tipo === "cobrando") {
+        if (actual.tipo === "buscando") actual.visto = ahora;
         return this.responder(req, res, 200, { estado: "buscando" });
       }
       return this.responder(req, res, 200, emparejado(actual));
     }
 
     if (req.method === "DELETE") {
-      if (actual?.tipo === "buscando") {
+      if (actual?.tipo === "buscando" || actual?.tipo === "fuera") {
         this.colas.salir(j);
+        this.enCola.delete(j);
+      }
+      if (actual?.tipo === "cobrando") {
+        // Se le devuelve la entrada cuando termine el cobro en curso.
+        actual.cancelado = true;
         this.enCola.delete(j);
       }
       return this.responder(req, res, 200, { estado: actual?.tipo === "emparejado" ? "emparejado" : "nada" });
@@ -200,6 +216,7 @@ export class ServidorPartidas {
     if (actual?.tipo === "emparejado" && this.salas.get(actual.sala)?.estadoFase !== "terminada") {
       return this.responder(req, res, 200, emparejado(actual));
     }
+    if (actual?.tipo === "cobrando") return this.responder(req, res, 202, { estado: "buscando" });
     const perfil = await datos.perfil(j, modo);
     if (!perfil) return this.responder(req, res, 401, { error: "No encontramos tu jugador" });
     if (!perfil.juega)
@@ -207,6 +224,11 @@ export class ServidorPartidas {
     if (!perfil.clasifica)
       return this.responder(req, res, 403, {
         error: "Tienes una sanción que no te deja jugar clasificatorias",
+      });
+    const nivel = salaPorId(sala)!;
+    if (perfil.saldo < nivel.entrada)
+      return this.responder(req, res, 409, {
+        error: `No te alcanzan las monedas: la entrada a ${nivel.nombre} cuesta ${nivel.entrada}`,
       });
     this.colas.salir(j);
     this.colas.cola(modo, sala).entrar({
@@ -235,31 +257,91 @@ export class ServidorPartidas {
       const eb = this.enCola.get(pareja.b.id);
       if (ea?.tipo !== "buscando" || eb?.tipo !== "buscando") continue;
       const id = randomBytes(9).toString("base64url");
-      const sala = new Sala(id, randomInt(0, 2 ** 32), this.reloj);
-      // Saca primero quien más esperó (pareja.a).
-      sala.sentar(0, ea.nombre);
-      sala.sentar(1, eb.nombre);
-      this.salas.set(id, sala);
-      const m = MODOS_COLA.find((x) => x === modo)!;
-      this.clasificatorias.set(id, { modo: m, a: pareja.a.id, b: pareja.b.id, sala: nivel });
-      sala.alTerminar = (s) => this.guardarClasificatoria(s);
-      this.enCola.set(pareja.a.id, {
-        tipo: "emparejado",
-        sala: id,
-        jugador: 0,
-        token: this.token(id, 0, ea.nombre),
-        rival: eb.nombre,
-      });
-      this.enCola.set(pareja.b.id, {
-        tipo: "emparejado",
-        sala: id,
-        jugador: 1,
-        token: this.token(id, 1, eb.nombre),
-        rival: ea.nombre,
-      });
+      const ca = { tipo: "cobrando" as const, antes: ea, cancelado: false };
+      const cb = { tipo: "cobrando" as const, antes: eb, cancelado: false };
+      this.enCola.set(pareja.a.id, ca);
+      this.enCola.set(pareja.b.id, cb);
+      const p = this.cobrarYAbrir(id, modo, nivel, [pareja.a, ca], [pareja.b, cb]).finally(() =>
+        this.cobrando.delete(p),
+      );
+      this.cobrando.add(p);
       n++;
     }
     return n;
+  }
+
+  /** Cobros de entrada en curso (las pruebas los esperan). */
+  readonly cobrando = new Set<Promise<void>>();
+
+  /**
+   * Cobra la entrada a los dos y les abre la sala. Si a uno no le alcanza, sale
+   * de la cola con el aviso y el otro vuelve a buscar sin perder su lugar.
+   */
+  private async cobrarYAbrir(
+    id: string,
+    modo: string,
+    nivel: string,
+    [a, ca]: [EnCola, Extract<EstadoCola, { tipo: "cobrando" }>],
+    [b, cb]: [EnCola, Extract<EstadoCola, { tipo: "cobrando" }>],
+  ): Promise<void> {
+    const datos = this.config.datos!;
+    const volver = (e: EnCola, c: typeof ca) => {
+      if (this.enCola.get(e.id) !== c) return;
+      c.antes.visto = this.reloj.ahora();
+      this.enCola.set(e.id, c.antes);
+      this.colas.cola(modo, nivel).entrar(e);
+    };
+    let falta: string | null;
+    try {
+      falta = await datos.cobrar(id, nivel, a.id, b.id);
+    } catch (e) {
+      console.error("No se pudo cobrar la entrada", id, e);
+      volver(a, ca);
+      volver(b, cb);
+      return;
+    }
+    if (falta !== null) {
+      for (const [e, c] of [
+        [a, ca],
+        [b, cb],
+      ] as const) {
+        if (e.id !== falta) volver(e, c);
+        else if (this.enCola.get(e.id) === c)
+          this.enCola.set(e.id, { tipo: "fuera", motivo: "No te alcanzan las monedas para esta sala" });
+      }
+      return;
+    }
+    if (ca.cancelado || cb.cancelado) {
+      // Alguien canceló mientras se cobraba: se devuelven las dos entradas.
+      await datos
+        .liquidar(id, nivel, a.id, b.id, null)
+        .catch((e: unknown) => console.error("No se pudo devolver la entrada", id, e));
+      if (!ca.cancelado) volver(a, ca);
+      if (!cb.cancelado) volver(b, cb);
+      return;
+    }
+    const sala = new Sala(id, randomInt(0, 2 ** 32), this.reloj);
+    // Saca primero quien más esperó (a).
+    sala.sentar(0, ca.antes.nombre);
+    sala.sentar(1, cb.antes.nombre);
+    this.salas.set(id, sala);
+    const m = MODOS_COLA.find((x) => x === modo)!;
+    this.clasificatorias.set(id, { modo: m, a: a.id, b: b.id, sala: nivel });
+    sala.alTerminar = (s) => this.guardarClasificatoria(s);
+    this.enCola.set(a.id, {
+      tipo: "emparejado",
+      sala: id,
+      jugador: 0,
+      token: this.token(id, 0, ca.antes.nombre),
+      rival: cb.antes.nombre,
+    });
+    this.enCola.set(b.id, {
+      tipo: "emparejado",
+      sala: id,
+      jugador: 1,
+      token: this.token(id, 1, cb.antes.nombre),
+      rival: ca.antes.nombre,
+    });
   }
 
   /** Promesas de guardado pendientes (las pruebas las esperan). */
@@ -276,6 +358,11 @@ export class ServidorPartidas {
     }
     const rep = s.repeticion();
     const ganador = s.ganador === null ? null : s.ganador === 0 ? meta.a : meta.b;
+    const pago = datos
+      .liquidar(s.id, meta.sala, meta.a, meta.b, ganador)
+      .catch((e: unknown) => console.error("No se pudo pagar el premio", s.id, e))
+      .finally(() => this.guardando.delete(pago));
+    this.guardando.add(pago);
     const p = datos
       .guardar({
         modo: meta.modo,

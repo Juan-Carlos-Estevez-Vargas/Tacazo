@@ -22,7 +22,15 @@ import type { FederatedPointerEvent } from "pixi.js";
 import { trazarGuia } from "./guia.js";
 import { BOLAS_POOL } from "./marca.js";
 import { VistaMesa, type PuntoMesa } from "./mesa.js";
-import { buscarRival, hayInvitado, invitado, sesionJuego } from "./cuenta.js";
+import {
+  buscarRival,
+  cobrarDiario,
+  hayInvitado,
+  invitado,
+  monedas,
+  sesionJuego,
+  type Invitado,
+} from "./cuenta.js";
 import { Red, asientoGuardado, crearSala, unirseSala, urlServidor, type Asiento } from "./red.js";
 import { Grabacion, eventosEnTiempo } from "./reproduccion.js";
 import { Sonido } from "./sonido.js";
@@ -212,12 +220,18 @@ export class Juego {
       panel.hidden = false;
       this.cancelarBusqueda = terminar;
       const yo = await invitado(nombre);
+      panel.hidden = true;
+      const sala = await this.elegirSala(yo);
+      if (sala === null || !this.cancelarBusqueda) return terminar();
+      texto.textContent = "Entrando a la cola…";
+      panel.hidden = false;
       const token = await sesionJuego(yo);
       if (!this.cancelarBusqueda) return;
       const inicio = performance.now();
       this.cancelarBusqueda = (() => {
         const cancelar = buscarRival(
           token,
+          sala,
           (e) => {
             if (e.estado === "buscando") {
               const s = Math.round((performance.now() - inicio) / 1000);
@@ -525,6 +539,59 @@ export class Juego {
       e.preventDefault();
       this.enviarApuntado();
       this.redibujar();
+    });
+  }
+
+  /** Muestra el saldo y las salas; devuelve la sala elegida o null. */
+  private async elegirSala(yo: Invitado): Promise<string | null> {
+    const m = await monedas(yo);
+    const d = $<HTMLDialogElement>("dialogo-sala");
+    const fmt = (n: number) => n.toLocaleString("es-CO");
+    const pintarSaldo = (s: number) => {
+      $("saldo").textContent = fmt(s);
+      for (const b of d.querySelectorAll<HTMLButtonElement>("button[data-entrada]"))
+        b.disabled = s < Number(b.dataset.entrada);
+    };
+    $("salas").replaceChildren(
+      ...m.salas.map((s) => {
+        const b = document.createElement("button");
+        b.value = s.id;
+        b.dataset.entrada = String(s.entrada);
+        b.className = "sala";
+        const n = document.createElement("strong");
+        n.textContent = s.nombre;
+        const t = document.createElement("span");
+        t.textContent = `Entrada ${fmt(s.entrada)} · Premio ${fmt(s.premio)}`;
+        b.append(n, t);
+        return b;
+      }),
+    );
+    const diario = $<HTMLButtonElement>("diario");
+    const horas = Math.ceil(m.diario.enMs / 3_600_000);
+    diario.disabled = !m.diario.disponible;
+    diario.textContent = m.diario.disponible
+      ? `Cobrar premio del día (+${fmt(m.diario.monto)})`
+      : `Premio del día cobrado · vuelve en ${horas} h`;
+    diario.onclick = () => {
+      diario.disabled = true;
+      void cobrarDiario(yo)
+        .then((s) => {
+          pintarSaldo(s);
+          diario.textContent = "¡Premio cobrado!";
+        })
+        .catch((e: unknown) => {
+          diario.textContent = e instanceof Error ? e.message : "No se pudo cobrar";
+        });
+    };
+    pintarSaldo(m.saldo);
+    d.returnValue = "";
+    d.showModal();
+    return new Promise((ok) => {
+      d.addEventListener(
+        "close",
+        () => ok(m.salas.some((s) => s.id === d.returnValue) ? d.returnValue : null),
+        { once: true },
+      );
     });
   }
 

@@ -32,6 +32,8 @@ repo ni en variables que lleguen al navegador.
 3. Poner las variables de arriba en el proveedor de cada servicio.
 4. `pnpm -r build` y arrancar `apps/api` y `apps/game-server` con `pnpm start`.
 5. Programar `pnpm --filter @tacazo/api senales` una vez por noche.
+6. Revisar cada semana `pnpm --filter @tacazo/api monedas 7` (fuentes y
+   sumideros de monedas, ver [ECONOMIA.md](ECONOMIA.md)).
 
 ## Versiones
 

@@ -20,6 +20,10 @@
       "types": "./dist/moderacion.d.ts",
       "default": "./dist/moderacion.js"
     },
+    "./monedas": {
+      "types": "./dist/monedas.d.ts",
+      "default": "./dist/monedas.js"
+    },
     "./partidas": {
       "types": "./dist/partidas.d.ts",
       "default": "./dist/partidas.js"
@@ -31,10 +35,11 @@
   },
   "scripts": {
     "build": "tsc -b",
+    "dev": "tsc -b && node --watch dist/index.js",
     "migrar": "tsc -b && node dist/cli-migrar.js",
+    "monedas": "tsc -b && node dist/cli-monedas.js",
     "senales": "tsc -b && node dist/cli-senales.js",
-    "start": "node dist/index.js",
-    "dev": "tsc -b && node --watch dist/index.js"
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@fastify/cors": "11.3.1",
