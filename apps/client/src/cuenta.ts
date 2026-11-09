@@ -6,7 +6,7 @@ export function urlApi(): string {
   return meta || `${location.protocol}//${location.hostname}:3000`;
 }
 
-interface Invitado {
+export interface Invitado {
   readonly jugador: string;
   readonly token: string;
 }
@@ -106,6 +106,33 @@ export async function sesionJuego(i: Invitado): Promise<string> {
   return (await json<{ token: string }>(r)).token;
 }
 
+export interface SalaNivel {
+  readonly id: string;
+  readonly nombre: string;
+  readonly entrada: number;
+  readonly premio: number;
+}
+
+export interface Monedas {
+  readonly saldo: number;
+  readonly salas: readonly SalaNivel[];
+  readonly diario: { readonly monto: number; readonly disponible: boolean; readonly enMs: number };
+}
+
+const conSesion = (i: Invitado, metodo = "GET") =>
+  ({ method: metodo, headers: { Authorization: `Bearer ${i.token}` } }) as const;
+
+/** Saldo, salas y si ya puede cobrar el premio diario. */
+export async function monedas(i: Invitado): Promise<Monedas> {
+  return json<Monedas>(await fetch(`${urlApi()}/monedas`, conSesion(i)));
+}
+
+/** Cobra el premio diario; devuelve el saldo nuevo. */
+export async function cobrarDiario(i: Invitado): Promise<number> {
+  return (await json<{ saldo: number }>(await fetch(`${urlApi()}/monedas/diario`, conSesion(i, "POST"))))
+    .saldo;
+}
+
 export type EstadoBusqueda = { estado: "buscando" } | ({ estado: "emparejado"; rival: string } & Asiento);
 
 /**
@@ -114,6 +141,7 @@ export type EstadoBusqueda = { estado: "buscando" } | ({ estado: "emparejado"; r
  */
 export function buscarRival(
   token: string,
+  sala: string,
   alCambiar: (e: EstadoBusqueda) => void,
   alFallar: (motivo: string) => void,
 ): () => void {
@@ -126,7 +154,7 @@ export function buscarRival(
       ...(cuerpo === undefined ? {} : { body: JSON.stringify(cuerpo) }),
     });
   const leer = async (r: Response) => {
-    const e = await json<EstadoBusqueda | { estado: "nada" }>(r);
+    const e = await json<EstadoBusqueda | { estado: "nada"; motivo?: string }>(r);
     if (!activo) return;
     if (e.estado === "emparejado") {
       activo = false;
@@ -135,7 +163,7 @@ export function buscarRival(
     }
     if (e.estado === "nada") {
       activo = false;
-      alFallar("Saliste de la cola. Vuelve a buscar.");
+      alFallar(e.motivo ?? "Saliste de la cola. Vuelve a buscar.");
       return;
     }
     alCambiar(e);
@@ -146,7 +174,7 @@ export function buscarRival(
     activo = false;
     alFallar(e instanceof Error ? e.message : "No se pudo buscar rival");
   };
-  void pedir("POST", { modo: "bola8", sala: "barrio" }).then(leer).catch(fallo);
+  void pedir("POST", { modo: "bola8", sala }).then(leer).catch(fallo);
   return () => {
     if (!activo) return;
     activo = false;
