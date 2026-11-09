@@ -117,6 +117,8 @@ export interface Monedas {
   readonly saldo: number;
   readonly salas: readonly SalaNivel[];
   readonly diario: { readonly monto: number; readonly disponible: boolean; readonly enMs: number };
+  /** Anuncio con premio: solo si no alcanza para la sala más barata. */
+  readonly anuncio: { readonly monto: number; readonly restantes: number; readonly disponible: boolean };
 }
 
 const conSesion = (i: Invitado, metodo = "GET") =>

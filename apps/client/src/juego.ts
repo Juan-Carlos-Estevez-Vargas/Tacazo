@@ -34,8 +34,15 @@ import {
 import { Red, asientoGuardado, crearSala, unirseSala, urlServidor, type Asiento } from "./red.js";
 import { Grabacion, eventosEnTiempo } from "./reproduccion.js";
 import { Sonido } from "./sonido.js";
+import { Anuncios } from "./anuncios.js";
 
 type Modo = "bot" | "red" | "repeticion";
+
+/** Puente con la app nativa (fase de apps): AdMob con verificación en el servidor. */
+interface TacazoNativo {
+  /** Muestra un anuncio con premio para ese jugador; true si se vio completo. */
+  anuncioConPremio(jugador: string): Promise<boolean>;
+}
 /**
  * apuntando: me toca. animando: se ve un tiro. rival: le toca al otro.
  * esperando: espero al servidor o a que llegue el amigo. fin: terminó.
@@ -92,7 +99,8 @@ export class Juego {
   private estado!: bola8.Bola8State;
   private rng!: Rng;
   private modo: Modo = "bot";
-  private fase: Fase = "apuntando";
+  private faseActual: Fase = "apuntando";
+  private anuncios: Anuncios | null = null;
   private yo: Jugador = 0;
   private nombres: [string, string] = ["Tú", "Bot"];
   private conectados: [boolean, boolean] = [true, true];
@@ -128,7 +136,18 @@ export class Juego {
     private readonly sonido: Sonido,
   ) {}
 
+  private get fase(): Fase {
+    return this.faseActual;
+  }
+
+  /** Cambia la fase; la tarjeta de anuncio solo puede verse con la partida terminada. */
+  private set fase(f: Fase) {
+    this.faseActual = f;
+    if (!this.cancelarBusqueda) this.anuncios?.ponerEn(f === "fin" ? "menu" : "mesa");
+  }
+
   iniciar(): void {
+    this.anuncios = new Anuncios();
     this.vista.alAjustar = () => this.redibujar();
     const stage = this.vista.app.stage;
     stage.on("pointerdown", (e) => this.alTocar(e));
@@ -214,6 +233,7 @@ export class Juego {
     const terminar = () => {
       this.cancelarBusqueda = null;
       panel.hidden = true;
+      this.anuncios?.ponerEn(this.fase === "fin" ? "menu" : "mesa");
     };
     try {
       texto.textContent = "Preparando tu jugador…";
@@ -225,6 +245,8 @@ export class Juego {
       if (sala === null || !this.cancelarBusqueda) return terminar();
       texto.textContent = "Entrando a la cola…";
       panel.hidden = false;
+      // Mientras espera rival está en un menú: aquí sí puede ir la tarjeta.
+      this.anuncios?.ponerEn("menu");
       const token = await sesionJuego(yo);
       if (!this.cancelarBusqueda) return;
       const inicio = performance.now();
@@ -583,6 +605,40 @@ export class Juego {
           diario.textContent = e instanceof Error ? e.message : "No se pudo cobrar";
         });
     };
+    const anuncio = $<HTMLButtonElement>("anuncio-premio");
+    const nativo = (window as unknown as { TacazoNativo?: TacazoNativo }).TacazoNativo;
+    // En la web no hay forma de que la red confirme el anuncio al servidor: solo en la app.
+    anuncio.hidden = !nativo || !m.anuncio.disponible;
+    anuncio.textContent = `Ver un anuncio y ganar ${fmt(m.anuncio.monto)} (quedan ${m.anuncio.restantes} hoy)`;
+    anuncio.onclick = () => {
+      if (!nativo) return;
+      anuncio.disabled = true;
+      anuncio.textContent = "Cargando anuncio…";
+      void nativo
+        .anuncioConPremio(yo.jugador)
+        .then(async (visto) => {
+          if (!visto) {
+            anuncio.textContent = "El anuncio no se vio completo";
+            return;
+          }
+          // El premio llega cuando la red de anuncios avisa al servidor.
+          anuncio.textContent = "Esperando la confirmación…";
+          for (let i = 0; i < 8; i++) {
+            await new Promise((r) => setTimeout(r, 1000));
+            const s = (await monedas(yo)).saldo;
+            if (s > m.saldo) {
+              pintarSaldo(s);
+              anuncio.textContent = `¡Listo! +${fmt(s - m.saldo)}`;
+              return;
+            }
+          }
+          anuncio.textContent = "Tu premio llegará en unos minutos";
+        })
+        .catch(() => {
+          anuncio.textContent = "No se pudo mostrar el anuncio";
+        });
+    };
+    anuncio.disabled = false;
     pintarSaldo(m.saldo);
     d.returnValue = "";
     d.showModal();
