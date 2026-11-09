@@ -230,3 +230,48 @@ describe("ranking, reportes y apelaciones por HTTP", () => {
     await chica.close();
   });
 });
+
+describe("monedas y tienda por HTTP", () => {
+  it("da bienvenida, premio diario una vez y muestra las salas", async () => {
+    const { token } = await invitado("Nico");
+    const m = (await pedir("GET", "/monedas", token)).json();
+    expect(m).toMatchObject({ saldo: 500, diario: { monto: 100, disponible: true } });
+    expect(m.salas.map((s: { id: string }) => s.id)).toEqual(["barrio", "club", "campeonato"]);
+    expect((await pedir("POST", "/monedas/diario", token)).json()).toEqual({ monto: 100, saldo: 600 });
+    const otra = await pedir("POST", "/monedas/diario", token);
+    expect(otra.statusCode).toBe(409);
+    expect((await pedir("GET", "/monedas", token)).json()).toMatchObject({
+      saldo: 600,
+      diario: { disponible: false },
+    });
+    expect((await pedir("GET", "/monedas")).statusCode).toBe(401);
+  });
+
+  it("compra, equipa solo lo propio y avisa si no alcanza", async () => {
+    const { token } = await invitado("Olga");
+    const pobre = await pedir("POST", "/tienda/taco_laton", token);
+    expect(pobre.statusCode).toBe(409);
+    expect(pobre.json()).toMatchObject({ error: "saldo" });
+    await pedir("POST", "/monedas/diario", token);
+    expect((await pedir("POST", "/tienda/taco_laton", token)).json()).toEqual({
+      resultado: "nuevo",
+      saldo: 0,
+    });
+    expect((await pedir("POST", "/tienda/taco_laton", token)).json()).toEqual({ resultado: "ya", saldo: 0 });
+    expect((await pedir("POST", "/tienda/marco_bronce", token)).statusCode).toBe(409);
+    expect((await pedir("POST", "/tienda/no_existe", token)).statusCode).toBe(409);
+    expect((await pedir("POST", "/tienda/..%2Fx", token)).statusCode).toBe(400);
+
+    const tienda = (await pedir("GET", "/tienda", token)).json();
+    expect(tienda).toMatchObject({ saldo: 0, partidas: 0, equipado: {} });
+    expect(tienda.tiene).toEqual(expect.arrayContaining(["taco_roble", "taco_laton", "pano_verde"]));
+
+    expect((await pedir("PATCH", "/yo/equipado", token, { taco: "taco_laton" })).json()).toEqual({
+      equipado: { taco: "taco_laton" },
+    });
+    expect((await pedir("PATCH", "/yo/equipado", token, { pano: "pano_azul" })).statusCode).toBe(409);
+    expect((await pedir("PATCH", "/yo/equipado", token, { marco: "taco_laton" })).statusCode).toBe(409);
+    expect((await pedir("PATCH", "/yo/equipado", token, { sombrero: "x" })).statusCode).toBe(400);
+    expect((await pedir("GET", "/yo", token)).json()).toMatchObject({ equipado: { taco: "taco_laton" } });
+  });
+});

@@ -23,6 +23,22 @@ import {
 } from "./cuentas.js";
 import { comoJugador, comoRol, type Base } from "./db.js";
 import { apelar, MOTIVOS, reportar, restricciones } from "./moderacion.js";
+import {
+  CATALOGO,
+  cobrarDiario,
+  comoMonedas,
+  conseguir,
+  darBienvenida,
+  diarioCobrado,
+  hastaManana,
+  inventario,
+  PREMIO_DIARIO,
+  revisarEquipo,
+  saldo,
+  SaldoInsuficiente,
+  SALAS,
+  type Equipado,
+} from "./monedas.js";
 import { MODOS, tablaAmigos, tablaGlobal, tablaPais } from "./ranking.js";
 
 export interface OpcionesApi {
@@ -71,6 +87,12 @@ const esquemas = {
     detalle: z.string().max(500).optional(),
   }),
   apelacion: z.strictObject({ texto: z.string().max(1000) }),
+  equipado: z.strictObject({
+    taco: z.string().max(40).optional(),
+    pano: z.string().max(40).optional(),
+    marco: z.string().max(40).optional(),
+  }),
+  objeto: z.string().regex(/^[a-z0-9_]{2,40}$/),
 };
 
 /** Vida del token para el servidor de partidas. */
@@ -105,13 +127,14 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
 
   app.setErrorHandler((e: unknown, _req, res) => {
     if (e instanceof ErrorApi) return res.code(e.estado).send({ error: e.codigo, mensaje: e.message });
+    if (e instanceof SaldoInsuficiente) return res.code(409).send({ error: "saldo", mensaje: e.message });
     if (e instanceof z.ZodError) return res.code(400).send({ error: "datos", mensaje: "Datos inválidos" });
     const err = e as { statusCode?: number; message?: string };
     if (err.statusCode && err.statusCode < 500)
       return res.code(err.statusCode).send({ error: "peticion", mensaje: "Petición inválida" });
     const msg = err.message ?? "";
     // Errores de reglas del negocio (lanzados a propósito) son 409.
-    if (/^(Ya |Esta |Este |Cuéntanos|Motivo)/.test(msg))
+    if (/^(Ya |Esta |Este |Ese |Cuéntanos|Motivo|Se desbloquea)/.test(msg))
       return res.code(409).send({ error: "regla", mensaje: msg });
     if (/row-level security|violates foreign key/.test(msg))
       return res.code(403).send({ error: "permiso", mensaje: "No puedes hacer eso" });
@@ -149,6 +172,7 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
     if (o.verificarHumano && !(await o.verificarHumano(d.turnstile, req.ip)))
       throw new ErrorApi(403, "humano", "No pudimos comprobar que eres una persona");
     const jugador = await crearInvitado(o.base, d);
+    await comoMonedas(o.base, (c) => darBienvenida(c, jugador));
     return res.code(201).send({ jugador, token: tokenInvitado(jugador) });
   });
 
@@ -175,7 +199,7 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
     const j = await quien(req);
     return comoJugador(o.base, j, async (c) => {
       const { rows } = await c.query(
-        "SELECT id, nombre, pais, region, invitado FROM jugadores WHERE id = $1",
+        "SELECT id, nombre, pais, region, invitado, equipado FROM jugadores WHERE id = $1",
         [j],
       );
       const { rows: ratings } = await c.query(
@@ -251,6 +275,82 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
     const { texto } = esquemas.apelacion.parse(req.body);
     await comoJugador(o.base, j, (c) => apelar(c, id, texto));
     return res.code(204).send();
+  });
+
+  // ---------- Monedas y cosméticos ----------
+
+  /** Partidas clasificatorias jugadas (todas las modalidades), para desbloqueos. */
+  const partidasDe = (j: string) =>
+    comoJugador(o.base, j, async (c) => {
+      const { rows } = await c.query<{ n: string | number | null }>(
+        "SELECT coalesce(sum(partidas), 0) AS n FROM ratings WHERE jugador = $1",
+        [j],
+      );
+      return Number(rows[0]?.n ?? 0);
+    });
+
+  app.get("/monedas", async (req) => {
+    const j = await quien(req);
+    return comoMonedas(o.base, async (c) => {
+      // Quien existía antes de las monedas recibe su bienvenida aquí (una sola vez).
+      await darBienvenida(c, j);
+      const t = ahora();
+      const cobrado = await diarioCobrado(c, j, t);
+      return {
+        saldo: await saldo(c, j),
+        salas: SALAS,
+        diario: { monto: PREMIO_DIARIO, disponible: !cobrado, enMs: cobrado ? hastaManana(t) : 0 },
+      };
+    });
+  });
+
+  app.post("/monedas/diario", async (req) => {
+    const j = await quien(req);
+    return comoMonedas(o.base, async (c) => {
+      const cobrado = await cobrarDiario(c, j, ahora());
+      if (!cobrado) throw new ErrorApi(409, "diario", "Ya cobraste el premio de hoy");
+      return { monto: PREMIO_DIARIO, saldo: await saldo(c, j) };
+    });
+  });
+
+  app.get("/tienda", async (req) => {
+    const j = await quien(req);
+    const partidas = await partidasDe(j);
+    const equipado = await comoJugador(o.base, j, async (c) => {
+      const { rows } = await c.query<{ equipado: Equipado }>("SELECT equipado FROM jugadores WHERE id = $1", [
+        j,
+      ]);
+      return rows[0]?.equipado ?? {};
+    });
+    const { tiene, monedas } = await comoMonedas(o.base, async (c) => ({
+      tiene: await inventario(c, j),
+      monedas: await saldo(c, j),
+    }));
+    return { catalogo: CATALOGO, tiene, equipado, partidas, saldo: monedas };
+  });
+
+  app.post<{ Params: { objeto: string } }>("/tienda/:objeto", async (req) => {
+    const j = await quien(req);
+    const objeto = esquemas.objeto.parse(req.params.objeto);
+    const partidas = await partidasDe(j);
+    return comoMonedas(o.base, async (c) => {
+      const resultado = await conseguir(c, j, objeto, partidas);
+      return { resultado, saldo: await saldo(c, j) };
+    });
+  });
+
+  app.patch("/yo/equipado", async (req) => {
+    const j = await quien(req);
+    const cambio = esquemas.equipado.parse(req.body) as Equipado;
+    const tiene = await comoMonedas(o.base, (c) => inventario(c, j));
+    return comoJugador(o.base, j, async (c) => {
+      const { rows } = await c.query<{ equipado: Equipado }>("SELECT equipado FROM jugadores WHERE id = $1", [
+        j,
+      ]);
+      const nuevo = revisarEquipo(rows[0]?.equipado ?? {}, cambio, tiene);
+      await c.query("UPDATE jugadores SET equipado = $2 WHERE id = $1", [j, JSON.stringify(nuevo)]);
+      return { equipado: nuevo };
+    });
   });
 
   return app;
