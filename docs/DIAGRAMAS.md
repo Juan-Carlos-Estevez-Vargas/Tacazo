@@ -108,12 +108,57 @@ erDiagram
     uuid a "a < b"
     uuid b
   }
+  JUGADORES ||--o{ ASIENTOS : "su saldo"
+  MOVIMIENTOS ||--|{ ASIENTOS : "suman cero"
+  JUGADORES ||--o{ INVENTARIO : tiene
+  MOVIMIENTOS {
+    uuid id
+    text clave "única"
+    text tipo
+  }
+  ASIENTOS {
+    uuid movimiento
+    uuid jugador "o sistema"
+    text sistema "emision, mesa, tienda"
+    bigint monto
+  }
+  INVENTARIO {
+    uuid jugador
+    text objeto
+  }
 ```
 
 Migraciones en `apps/api/migraciones/`. Seguridad por fila: con el rol
 `tacazo_api` cada jugador ve solo sus partidas y amistades, y edita solo su
-perfil; `tacazo_partidas` (el servidor de partidas) guarda partidas y ratings.
+perfil; `tacazo_partidas` (el servidor de partidas) guarda partidas y ratings, y
+`tacazo_monedas` es el único que escribe en el libro de monedas.
 Detalle en [ADR 0004](adr/0004-postgres-migraciones-rls.md).
+
+## Monedas en una clasificatoria
+
+```mermaid
+sequenceDiagram
+  actor A as Jugador A
+  actor B as Jugador B
+  participant GS as Servidor de partidas
+  participant DB as Libro de monedas
+  A->>GS: POST /cola (sala club)
+  GS->>DB: ¿saldo ≥ entrada?
+  B->>GS: POST /cola (sala club)
+  GS->>GS: empareja A y B
+  GS->>DB: cobra entrada a los dos (una transacción)
+  alt a uno no le alcanza
+    DB-->>GS: no cuadra, se deshace
+    GS-->>A: sigue buscando
+    GS-->>B: fuera: «No te alcanzan las monedas»
+  else cobrado
+    GS-->>A: emparejado
+    GS-->>B: emparejado
+    Note over A,B: juegan
+    GS->>DB: premio al ganador (clave premio:partida)
+    Note over DB: el resto de las entradas sale de circulación
+  end
+```
 
 ## Moderación
 
