@@ -22,7 +22,8 @@ export interface Base extends Consulta {
   cerrar(): Promise<void>;
 }
 
-export type Rol = "tacazo_api" | "tacazo_partidas" | "tacazo_moderacion" | "tacazo_cuentas";
+export type Rol =
+  "tacazo_api" | "tacazo_partidas" | "tacazo_moderacion" | "tacazo_cuentas" | "tacazo_monedas";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
