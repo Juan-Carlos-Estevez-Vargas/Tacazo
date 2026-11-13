@@ -198,6 +198,43 @@
         border-radius: 8px;
         padding: 10px;
       }
+      #anuncio {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        max-width: 480px;
+        width: 100%;
+        margin: 0 auto;
+        min-height: 60px;
+        max-height: 100px;
+        overflow: hidden;
+        border: 1px solid var(--borde);
+        border-radius: 8px;
+        padding: 4px 36px 4px 8px;
+      }
+      #anuncio[hidden] {
+        display: none;
+      }
+      #anuncio-caja {
+        flex: 1;
+        min-width: 0;
+      }
+      .anuncio-etiqueta {
+        font-size: 11px;
+        color: var(--tenue);
+      }
+      #anuncio-cerrar {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        min-height: 32px;
+        width: 32px;
+        padding: 0;
+      }
+      .casilla {
+        color: var(--marfil);
+      }
       .salas {
         display: grid;
         gap: 8px;
@@ -220,8 +257,13 @@
         opacity: 0.5;
         cursor: not-allowed;
       }
-      #diario {
+      #diario,
+      #anuncio-premio {
         width: 100%;
+        margin-top: 8px;
+      }
+      #anuncio-premio[hidden] {
+        display: none;
       }
       .saldo strong {
         font-family: var(--numeros);
@@ -386,6 +428,11 @@
         <button id="cancelar-busqueda" type="button">Cancelar</button>
         <div id="turnstile" hidden></div>
       </div>
+      <aside id="anuncio" hidden aria-label="Publicidad">
+        <span class="anuncio-etiqueta">Publicidad</span>
+        <div id="anuncio-caja"></div>
+        <button id="anuncio-cerrar" type="button" aria-label="Cerrar anuncio">×</button>
+      </aside>
       <div id="version" hidden role="alert">
         Hay una versión nueva de Tacazo. <button type="button" onclick="location.reload()">Actualizar</button>
       </div>
@@ -416,6 +463,7 @@
         <button id="amigo" type="button">Jugar con un amigo</button>
         <button id="clasificatoria" type="button">Clasificatoria</button>
         <button id="sonido" type="button" aria-pressed="false">Sonido: sí</button>
+        <button id="privacidad" type="button" hidden>Privacidad</button>
       </footer>
     </div>
     <dialog id="dialogo-nombre">
@@ -435,9 +483,28 @@
         <p class="saldo">Tienes <strong id="saldo">0</strong> monedas</p>
         <div id="salas" class="salas"></div>
         <button id="diario" type="button"></button>
+        <button id="anuncio-premio" type="button" hidden></button>
         <p class="nota">El ganador se lleva el premio. Las monedas no se compran: se ganan jugando.</p>
         <div class="acciones">
           <button value="cancelar" formnovalidate>Cancelar</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="dialogo-anuncios" aria-labelledby="anuncios-titulo">
+      <form method="dialog">
+        <h2 id="anuncios-titulo">Anuncios y privacidad</h2>
+        <p>
+          Tacazo es gratis gracias a anuncios pequeños que solo salen en los menús, nunca mientras juegas.
+          ¿Qué anuncios prefieres?
+        </p>
+        <label class="casilla"><input id="anuncios-menor" type="checkbox" /> Tengo menos de 18 años</label>
+        <p class="nota">
+          «Según mis intereses» deja que Google use cookies para elegirlos. Si eres menor de edad siempre
+          verás anuncios generales. Puedes cambiarlo cuando quieras en Privacidad.
+        </p>
+        <div class="acciones">
+          <button value="intereses">Según mis intereses</button>
+          <button value="generales" class="principal">Anuncios generales</button>
         </div>
       </form>
     </dialog>

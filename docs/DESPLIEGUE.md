@@ -20,6 +20,8 @@
 | `TACAZO_ORIGENES` | API y servidor de partidas | sí | Orígenes permitidos (CORS y WebSocket), separados por comas |
 | `TACAZO_UMBRALES` | Trabajo nocturno | no | Umbrales anti-trampas en JSON ([MODERACION.md](MODERACION.md)) |
 | `PUERTO` | API (3000) y servidor de partidas (2567) | sí | Puerto HTTP |
+| AdSense | Cliente (`meta tacazo-adsense` = `ca-pub-…` y `meta tacazo-adsense-slot` = id del bloque) | sí | Tarjeta de anuncio en menús; sin ellas no hay anuncios |
+| Verificación de AdMob | Consola de AdMob, en el bloque con premio | sí | URL `https://<api>/anuncios/admob` para la verificación del lado del servidor |
 
 Las privadas van solo en los secretos del proveedor o de GitHub, nunca en el
 repo ni en variables que lleguen al navegador.

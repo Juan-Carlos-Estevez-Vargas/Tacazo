@@ -21,6 +21,16 @@ import {
   type VerificarCuenta,
   type VerificarHumano,
 } from "./cuentas.js";
+import {
+  acreditarAnuncio,
+  ANUNCIOS_POR_DIA,
+  anunciosDeHoy,
+  clavesAdmob,
+  ENTRADA_MINIMA,
+  PREMIO_ANUNCIO,
+  verificarAdmob,
+  type ClavesAnuncio,
+} from "./anuncios.js";
 import { comoJugador, comoRol, type Base } from "./db.js";
 import { apelar, MOTIVOS, reportar, restricciones } from "./moderacion.js";
 import {
@@ -51,6 +61,8 @@ export interface OpcionesApi {
   readonly ahora?: () => number;
   /** Peticiones por minuto por IP. */
   readonly limite?: number;
+  /** Claves públicas para verificar los premios de AdMob (por defecto, las de Google). */
+  readonly clavesAnuncio?: ClavesAnuncio;
 }
 
 const Uuid = z.uuid();
@@ -110,6 +122,7 @@ class ErrorApi extends Error {
 
 export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
   const ahora = o.ahora ?? Date.now;
+  const clavesAnuncio = o.clavesAnuncio ?? clavesAdmob();
   const app = Fastify({ bodyLimit: 16 * 1024, logger: false, trustProxy: true });
   await app.register(cors, { origin: [...o.origenes], methods: ["GET", "POST", "PATCH"] });
 
@@ -296,10 +309,14 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
       await darBienvenida(c, j);
       const t = ahora();
       const cobrado = await diarioCobrado(c, j, t);
+      const s = await saldo(c, j);
+      const restantes = Math.max(0, ANUNCIOS_POR_DIA - (await anunciosDeHoy(c, j, t)));
       return {
-        saldo: await saldo(c, j),
+        saldo: s,
         salas: SALAS,
         diario: { monto: PREMIO_DIARIO, disponible: !cobrado, enMs: cobrado ? hastaManana(t) : 0 },
+        // Solo se ofrece cuando no alcanza para la sala más barata.
+        anuncio: { monto: PREMIO_ANUNCIO, restantes, disponible: s < ENTRADA_MINIMA && restantes > 0 },
       };
     });
   });
@@ -311,6 +328,19 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
       if (!cobrado) throw new ErrorApi(409, "diario", "Ya cobraste el premio de hoy");
       return { monto: PREMIO_DIARIO, saldo: await saldo(c, j) };
     });
+  });
+
+  /**
+   * Verificación del lado del servidor de AdMob. Responde 200 a toda llamada
+   * bien firmada (aunque no acredite, para que AdMob no reintente) y 403 al resto.
+   */
+  app.get("/anuncios/admob", async (req, res) => {
+    const url = req.raw.url ?? "";
+    const consulta = url.includes("?") ? url.slice(url.indexOf("?") + 1) : "";
+    const premio = await verificarAdmob(consulta, clavesAnuncio);
+    if (!premio) throw new ErrorApi(403, "firma", "Firma inválida");
+    const resultado = await comoMonedas(o.base, (c) => acreditarAnuncio(c, premio, ahora()));
+    return res.code(200).send({ resultado });
   });
 
   app.get("/tienda", async (req) => {
