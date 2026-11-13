@@ -167,6 +167,49 @@ export function devolverEntrada(
   });
 }
 
+/** Una partida clasificatoria no dura tanto: si pasó esto sin premio ni devolución, algo se cayó. */
+export const ENTRADA_HUERFANA_MS = 3 * 3_600_000;
+
+/**
+ * Devuelve las entradas que quedaron sin premio ni devolución, por ejemplo si
+ * el servidor de partidas se reinició en medio de una partida (las salas viven
+ * en memoria). Mira la última semana; cada devolución tiene su clave, así que
+ * correrla dos veces no paga dos veces. Devuelve cuántas devolvió.
+ */
+export async function devolverHuerfanas(
+  c: Consulta,
+  ahora: number,
+  edadMs = ENTRADA_HUERFANA_MS,
+): Promise<number> {
+  const { rows } = await c.query<{ partida: string; jugador: string; monto: string | number }>(
+    `SELECT split_part(m.clave, ':', 2) AS partida, a.jugador, -a.monto AS monto
+     FROM movimientos m JOIN asientos a ON a.movimiento = m.id AND a.jugador IS NOT NULL
+     WHERE m.tipo = 'entrada'
+       AND m.creado < to_timestamp($1::double precision / 1000)
+       AND m.creado > to_timestamp($1::double precision / 1000) - interval '7 days'
+       AND NOT EXISTS (SELECT 1 FROM movimientos p WHERE p.clave = 'premio:' || split_part(m.clave, ':', 2))
+       AND NOT EXISTS (
+         SELECT 1 FROM movimientos d
+         WHERE d.clave = 'devolucion:' || split_part(m.clave, ':', 2) || ':' || a.jugador
+       )
+     ORDER BY m.creado
+     LIMIT 500`,
+    [ahora - edadMs],
+  );
+  let n = 0;
+  for (const r of rows) {
+    const monto = Number(r.monto);
+    if (!(monto > 0)) continue;
+    const hecho = await mover(c, {
+      clave: `devolucion:${r.partida}:${r.jugador}`,
+      tipo: "devolucion",
+      asientos: pagar(r.jugador, monto, "mesa"),
+    });
+    if (hecho) n++;
+  }
+  return n;
+}
+
 // ---------- Cosméticos ----------
 
 export type Ranura = "taco" | "pano" | "marco";

@@ -9,6 +9,8 @@ import {
   conseguir,
   darBienvenida,
   devolverEntrada,
+  devolverHuerfanas,
+  ENTRADA_HUERFANA_MS,
   diaLocal,
   flujo,
   inventario,
@@ -152,6 +154,29 @@ describe("libro de monedas", () => {
     expect(await comoMonedas(base, (c) => devolverEntrada(c, "p2", j, barrio))).toBe(true);
     expect(await comoMonedas(base, (c) => devolverEntrada(c, "p2", j, barrio))).toBe(false);
     expect(await saldoDe(j)).toBe(BIENVENIDA);
+  });
+
+  it("devuelve las entradas que quedaron sin premio ni devolución", async () => {
+    const [a, b, c2] = [await nuevoJugador("Ofe"), await nuevoJugador("Pío"), await nuevoJugador("Quim")];
+    for (const j of [a, b, c2]) await comoMonedas(base, (c) => darBienvenida(c, j));
+    await comoMonedas(base, async (c) => {
+      // Partida cortada por un reinicio: nadie cobró nada.
+      await cobrarEntrada(c, "cortada", a, barrio);
+      await cobrarEntrada(c, "cortada", b, barrio);
+      // Partida terminada: ya se pagó el premio.
+      await cobrarEntrada(c, "jugada", c2, club);
+      await pagarPremio(c, "jugada", c2, club);
+    });
+    const ahora = Date.now();
+    // Recién cobradas: puede que se estén jugando todavía.
+    expect(await comoMonedas(base, (c) => devolverHuerfanas(c, ahora))).toBe(0);
+    const despues = ahora + ENTRADA_HUERFANA_MS + 60_000;
+    // Otras pruebas de este archivo también dejaron entradas sueltas.
+    expect(await comoMonedas(base, (c) => devolverHuerfanas(c, despues))).toBeGreaterThanOrEqual(2);
+    expect(await comoMonedas(base, (c) => devolverHuerfanas(c, despues))).toBe(0);
+    expect(await saldoDe(a)).toBe(BIENVENIDA);
+    expect(await saldoDe(b)).toBe(BIENVENIDA);
+    expect(await saldoDe(c2)).toBe(BIENVENIDA - club.entrada + club.premio);
   });
 
   it("cobros simultáneos al mismo jugador no lo dejan en negativo", async () => {

@@ -52,7 +52,14 @@ function cliente(origen = ORIGEN) {
 describe("servidor de partidas", () => {
   it("responde a /salud", async () => {
     const r = await fetch(`http://${base}/salud`);
-    expect(await r.json()).toEqual({ ok: true, motor: ENGINE_VERSION, protocolo: PROTOCOLO });
+    expect(await r.json()).toMatchObject({
+      ok: true,
+      motor: ENGINE_VERSION,
+      protocolo: PROTOCOLO,
+      salas: expect.any(Number),
+      enCola: 0,
+      memoriaMB: expect.any(Number),
+    });
   });
 
   it("crea una sala, deja unirse a un invitado y juega un tiro por WebSocket", async () => {

@@ -18,7 +18,15 @@ export default tseslint.config(
     // Scripts de la plantilla y archivos de configuración: corren en Node.
     files: ["scripts/**/*.mjs", "*.config.{js,ts}"],
     languageOptions: {
-      globals: { process: "readonly", console: "readonly", Buffer: "readonly", URL: "readonly" },
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+        fetch: "readonly",
+        Response: "readonly",
+        AbortSignal: "readonly",
+      },
     },
   },
   {

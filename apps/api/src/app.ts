@@ -7,6 +7,7 @@
  * (`inv.…`) o un JWT de Neon Auth ya vinculado a un jugador.
  */
 import cors from "@fastify/cors";
+import { ENGINE_VERSION } from "@tacazo/core";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
@@ -49,6 +50,7 @@ import {
   SALAS,
   type Equipado,
 } from "./monedas.js";
+import { crearAlertas, type Alertar } from "./alertas.js";
 import { MODOS, tablaAmigos, tablaGlobal, tablaPais } from "./ranking.js";
 
 export interface OpcionesApi {
@@ -63,6 +65,8 @@ export interface OpcionesApi {
   readonly limite?: number;
   /** Claves públicas para verificar los premios de AdMob (por defecto, las de Google). */
   readonly clavesAnuncio?: ClavesAnuncio;
+  /** A quién avisar de los errores 500 (por defecto, solo al log). */
+  readonly alertar?: Alertar;
 }
 
 const Uuid = z.uuid();
@@ -138,7 +142,8 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
     if (cuentas.size > 50_000) cuentas.clear();
   });
 
-  app.setErrorHandler((e: unknown, _req, res) => {
+  const alertar = o.alertar ?? crearAlertas({ servicio: "api" });
+  app.setErrorHandler((e: unknown, req, res) => {
     if (e instanceof ErrorApi) return res.code(e.estado).send({ error: e.codigo, mensaje: e.message });
     if (e instanceof SaldoInsuficiente) return res.code(409).send({ error: "saldo", mensaje: e.message });
     if (e instanceof z.ZodError) return res.code(400).send({ error: "datos", mensaje: "Datos inválidos" });
@@ -151,7 +156,7 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
       return res.code(409).send({ error: "regla", mensaje: msg });
     if (/row-level security|violates foreign key/.test(msg))
       return res.code(403).send({ error: "permiso", mensaje: "No puedes hacer eso" });
-    app.log.error(e);
+    alertar(`${req.method} ${req.routeOptions.url ?? "?"}`, e);
     return res.code(500).send({ error: "interno", mensaje: "Algo falló de nuestro lado" });
   });
 
@@ -178,7 +183,17 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
 
   const tokenInvitado = (j: string) => firmarInvitado(j, ahora() + VIDA_INVITADO_MS, o.secreto);
 
-  app.get("/salud", async () => ({ ok: true }));
+  // Salud real: si la base no responde, 503 para que el monitor avise.
+  app.get("/salud", async (_req, res) => {
+    const t = Date.now();
+    try {
+      await o.base.query("SELECT 1");
+    } catch (e) {
+      alertar("salud", e);
+      return res.code(503).send({ ok: false, base: false });
+    }
+    return { ok: true, base: true, ms: Date.now() - t, motor: ENGINE_VERSION };
+  });
 
   app.post("/invitados", async (req, res) => {
     const d = esquemas.invitado.parse(req.body);

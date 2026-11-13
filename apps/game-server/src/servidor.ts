@@ -9,6 +9,7 @@ import {
 } from "@tacazo/core";
 import { leerInvitado } from "@tacazo/api/cuentas";
 import { salaPorId } from "@tacazo/api/monedas";
+import { crearAlertas, type Alertar } from "@tacazo/api/alertas";
 import type { Datos } from "@tacazo/api/partidas";
 import { WebSocketServer, type WebSocket } from "ws";
 import { Colas, type EnCola } from "./emparejamiento.js";
@@ -23,6 +24,8 @@ export interface Config {
   readonly reloj?: Reloj;
   /** Base de datos para la cola clasificatoria; sin ella solo hay partidas con amigos. */
   readonly datos?: Datos | null;
+  /** A quién avisar de los errores con monedas o partidas (por defecto, solo al log). */
+  readonly alertar?: Alertar;
 }
 
 const emparejado = (e: Extract<EstadoCola, { tipo: "emparejado" }>) => ({
@@ -124,8 +127,11 @@ export class ServidorPartidas {
     { modo: (typeof MODOS_COLA)[number]; a: string; b: string; sala: string }
   >();
 
+  private readonly alertar: Alertar;
+
   constructor(private readonly config: Config) {
     this.reloj = config.reloj ?? relojReal;
+    this.alertar = config.alertar ?? crearAlertas({ servicio: "partidas" });
     this.http = createServer((req, res) => void this.atender(req, res));
     // Cortar peticiones lentas a propósito (slowloris).
     this.http.requestTimeout = 10_000;
@@ -309,7 +315,7 @@ export class ServidorPartidas {
     try {
       falta = await datos.cobrar(id, nivel, a.id, b.id);
     } catch (e) {
-      console.error("No se pudo cobrar la entrada", id, e);
+      this.alertar(`cobrar entrada ${id}`, e);
       volver(a, ca);
       volver(b, cb);
       return;
@@ -329,7 +335,7 @@ export class ServidorPartidas {
       // Alguien canceló mientras se cobraba: se devuelven las dos entradas.
       await datos
         .liquidar(id, nivel, a.id, b.id, null)
-        .catch((e: unknown) => console.error("No se pudo devolver la entrada", id, e));
+        .catch((e: unknown) => this.alertar(`devolver entrada ${id}`, e));
       if (!ca.cancelado) volver(a, ca);
       if (!cb.cancelado) volver(b, cb);
       return;
@@ -374,7 +380,7 @@ export class ServidorPartidas {
     const ganador = s.ganador === null ? null : s.ganador === 0 ? meta.a : meta.b;
     const pago = datos
       .liquidar(s.id, meta.sala, meta.a, meta.b, ganador)
-      .catch((e: unknown) => console.error("No se pudo pagar el premio", s.id, e))
+      .catch((e: unknown) => this.alertar(`pagar premio ${s.id}`, e))
       .finally(() => this.guardando.delete(pago));
     this.guardando.add(pago);
     const p = datos
@@ -387,7 +393,7 @@ export class ServidorPartidas {
         motivo: rep.motivo,
         repeticion: rep,
       })
-      .catch((e: unknown) => console.error("No se pudo guardar la partida", s.id, e))
+      .catch((e: unknown) => this.alertar(`guardar partida ${s.id}`, e))
       .finally(() => this.guardando.delete(p));
     this.guardando.add(p);
   }
@@ -433,7 +439,16 @@ export class ServidorPartidas {
         return;
       }
       if (req.method === "GET" && url.pathname === "/salud")
-        return this.responder(req, res, 200, { ok: true, motor: ENGINE_VERSION, protocolo: PROTOCOLO });
+        return this.responder(req, res, 200, {
+          ok: true,
+          motor: ENGINE_VERSION,
+          protocolo: PROTOCOLO,
+          salas: this.salas.size,
+          enCola: this.enCola.size,
+          cola: Boolean(this.config.datos),
+          memoriaMB: Math.round(process.memoryUsage().rss / 1_048_576),
+          activoS: Math.round(process.uptime()),
+        });
 
       if (req.method === "POST" && url.pathname === "/salas") {
         const ip = req.socket.remoteAddress ?? "?";

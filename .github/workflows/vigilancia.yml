@@ -1,0 +1,38 @@
+# Vigilancia: cada 10 minutos pide /salud a la API y al servidor de partidas.
+# Si algo falla, el flujo queda en rojo (GitHub avisa por correo) y, si está
+# el secreto TACAZO_ALERTAS_WEBHOOK, manda un mensaje a Discord o Slack.
+#
+# Las URLs van en las variables del repo TACAZO_URL_API y TACAZO_URL_PARTIDAS;
+# mientras no existan, el flujo pasa sin hacer nada.
+name: Vigilancia
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vigilancia
+  cancel-in-progress: false
+
+jobs:
+  salud:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Pedir /salud
+        env:
+          TACAZO_URL_API: ${{ vars.TACAZO_URL_API }}
+          TACAZO_URL_PARTIDAS: ${{ vars.TACAZO_URL_PARTIDAS }}
+          TACAZO_ALERTAS_WEBHOOK: ${{ secrets.TACAZO_ALERTAS_WEBHOOK }}
+        run: node scripts/vigilar.mjs
