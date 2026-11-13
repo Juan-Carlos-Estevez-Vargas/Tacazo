@@ -37,6 +37,37 @@ repo ni en variables que lleguen al navegador.
 6. Revisar cada semana `pnpm --filter @tacazo/api monedas 7` (fuentes y
    sumideros de monedas, ver [ECONOMIA.md](ECONOMIA.md)).
 
+## Capacidad y prueba de carga
+
+El servidor de partidas usa un solo núcleo (Node). Medido el 13-11-2026 con
+`cli-carga`: bots que tiran al azar en un contenedor de 4 núcleos, con los bots
+en la misma máquina, así que el resultado es conservador.
+
+| Salas a la vez | Tiros por segundo | Respuesta al tiro p50 · p95 | Errores |
+| --- | --- | --- | --- |
+| 50 | 95 | 9 ms · 45 ms | 0 |
+| 100 | 155 | 91 ms · 371 ms | 0 |
+| 200 | 143 | 728 ms · 1.105 ms | 0 |
+
+Un núcleo aguanta unos **150 tiros por segundo**; por encima, la respuesta se
+alarga pero no se pierde nada. En los bots cada tiro llega a los 0,5 s; una
+persona tarda unos 10 s en apuntar, así que un núcleo da para **unas 1.500
+salas reales**. Si el p95 pasa de 300 ms en producción, toca otro proceso u
+otra máquina.
+
+Para repetirla:
+
+```bash
+TACAZO_SALAS_POR_MINUTO=100000 pnpm --filter @tacazo/game-server start   # otra terminal
+pnpm --filter @tacazo/game-server carga -- --salas 100 --segundos 60
+```
+
+`TACAZO_SALAS_POR_MINUTO` sube el límite de salas por IP y se ignora con
+`NODE_ENV=production`.
+
+El cliente completo pesa unos 650 KB (200 KB comprimido). `pnpm run check` corre
+`scripts/check-peso.mjs`, que falla si pasa de 3 MB.
+
 ## Versiones
 
 Se sigue [SemVer](https://semver.org/lang/es/) a partir de los commits
