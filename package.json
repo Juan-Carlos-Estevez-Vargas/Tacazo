@@ -13,7 +13,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "build": "pnpm -r --if-present run build",
-    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build && node scripts/check-peso.mjs",
     "test:golden": "vitest run packages/core/test"
   },
   "devDependencies": {
