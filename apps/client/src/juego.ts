@@ -23,14 +23,18 @@ import { trazarGuia } from "./guia.js";
 import { BOLAS_POOL } from "./marca.js";
 import { VistaMesa, type PuntoMesa } from "./mesa.js";
 import {
+  aceptarLegal,
   buscarRival,
   cobrarDiario,
   hayInvitado,
   invitado,
+  legalPendiente,
   monedas,
   sesionJuego,
+  type Acepta,
   type Invitado,
 } from "./cuenta.js";
+import { pedirAceptacion, prepararMisDatos } from "./legal.js";
 import { Red, asientoGuardado, crearSala, unirseSala, urlServidor, type Asiento } from "./red.js";
 import { Grabacion, eventosEnTiempo } from "./reproduccion.js";
 import { Sonido } from "./sonido.js";
@@ -113,6 +117,9 @@ export class Juego {
   private modo: Modo = "bot";
   private faseActual: Fase = "apuntando";
   private anuncios: Anuncios | null = null;
+  private misDatos: { actualizar(): void } | null = null;
+  /** Ya se revisó en esta visita que aceptó las versiones vigentes. */
+  private legalAlDia = false;
   private yo: Jugador = 0;
   private nombres: [string, string] = [msg().comun.tu, msg().comun.bot];
   private conectados: [boolean, boolean] = [true, true];
@@ -160,6 +167,7 @@ export class Juego {
 
   iniciar(): void {
     this.anuncios = new Anuncios();
+    this.misDatos = prepararMisDatos(() => (this.legalAlDia = false));
     this.vista.alAjustar = () => this.redibujar();
     const stage = this.vista.app.stage;
     stage.on("pointerdown", (e) => this.alTocar(e));
@@ -235,10 +243,13 @@ export class Juego {
   async jugarClasificatoria(): Promise<void> {
     if (this.cancelarBusqueda) return;
     let nombre = msg().comun.invitado;
+    let acepta: Acepta | null = null;
     if (!hayInvitado()) {
       const n = await this.pedirNombre(msg().cola.titulo);
       if (n === null) return;
       nombre = n;
+      acepta = await pedirAceptacion();
+      if (!acepta) return;
     }
     const panel = $("buscando");
     const texto = $("buscando-texto");
@@ -251,8 +262,17 @@ export class Juego {
       texto.textContent = msg().cola.preparando;
       panel.hidden = false;
       this.cancelarBusqueda = terminar;
-      const yo = await invitado(nombre);
+      const yo = await invitado(nombre, acepta);
       panel.hidden = true;
+      this.misDatos?.actualizar();
+      // Si cambió una versión de los textos legales, se pide aceptar otra vez.
+      if (acepta) this.legalAlDia = true;
+      if (!this.legalAlDia && (await legalPendiente(yo))) {
+        const nueva = await pedirAceptacion(true);
+        if (!nueva) return terminar();
+        await aceptarLegal(yo, nueva);
+      }
+      this.legalAlDia = true;
       const sala = await this.elegirSala(yo);
       if (sala === null || !this.cancelarBusqueda) return terminar();
       texto.textContent = msg().cola.entrando;

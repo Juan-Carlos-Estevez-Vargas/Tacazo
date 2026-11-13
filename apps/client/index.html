@@ -264,6 +264,37 @@
       .casilla {
         color: var(--marfil);
       }
+      .casilla[hidden],
+      .nota[hidden] {
+        display: none;
+      }
+      .edad {
+        border: 1px solid var(--borde);
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin: 0;
+      }
+      .edad legend {
+        color: var(--tenue);
+        padding: 0 4px;
+      }
+      dialog a,
+      .legales a {
+        color: var(--laton-claro);
+      }
+      .legales {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        font-size: 13px;
+      }
+      .peligro:not(:disabled) {
+        border-color: #ff8a8a;
+        color: #ff8a8a;
+      }
       .salas {
         display: grid;
         gap: 8px;
@@ -516,6 +547,13 @@
           <span data-t="html.daltonico">Bolas con número</span></label
         >
         <select id="idioma" aria-label="Idioma" data-t-aria="html.idioma"></select>
+        <nav class="legales" aria-label="Legal" data-t-aria="html.legal">
+          <a href="legal/terminos.html" target="_blank" rel="noopener" data-t="html.terminos">Términos</a>
+          <a href="legal/privacidad.html" target="_blank" rel="noopener" data-t="html.politicaPrivacidad"
+            >Política de privacidad</a
+          >
+          <button id="mis-datos" type="button" hidden data-t="html.misDatos">Mis datos</button>
+        </nav>
       </footer>
     </div>
     <dialog id="dialogo-nombre">
@@ -570,6 +608,70 @@
           <button value="generales" class="principal" data-t="html.anunciosGenerales">
             Anuncios generales
           </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="dialogo-legal" aria-labelledby="legal-titulo">
+      <form method="dialog">
+        <h2 id="legal-titulo" data-t="html.legalTitulo">Antes de jugar</h2>
+        <p id="legal-cambio" class="nota" hidden data-t="html.legalCambio">
+          Cambiaron los términos o la política de privacidad. Léelos y acéptalos para seguir.
+        </p>
+        <p>
+          <span data-t="html.legalLee">Lee los</span>
+          <a href="legal/terminos.html" target="_blank" rel="noopener" data-t="html.terminos">Términos</a>
+          <span data-t="html.y">y la</span>
+          <a href="legal/privacidad.html" target="_blank" rel="noopener" data-t="html.politicaPrivacidad"
+            >Política de privacidad</a
+          >.
+        </p>
+        <fieldset id="legal-edad" class="edad">
+          <legend data-t="html.edadPregunta">¿Cuántos años tienes?</legend>
+          <label class="casilla"
+            ><input type="radio" name="edad" value="menor14" />
+            <span data-t="html.edadMenos14">Menos de 14</span></label
+          >
+          <label class="casilla"
+            ><input type="radio" name="edad" value="14-17" />
+            <span data-t="html.edad14a17">De 14 a 17</span></label
+          >
+          <label class="casilla"
+            ><input type="radio" name="edad" value="18+" /> <span data-t="html.edad18">18 o más</span></label
+          >
+        </fieldset>
+        <p id="legal-menor14" class="nota" role="alert" hidden data-t="html.edadMinima">
+          Tacazo es para personas de 14 años o más. Puedes jugar contra el bot o con un amigo por enlace.
+        </p>
+        <label id="legal-autorizacion-caja" class="casilla" hidden
+          ><input id="legal-autorizacion" type="checkbox" />
+          <span data-t="html.autorizacion">Mi madre, padre o acudiente leyó y autorizó esto</span></label
+        >
+        <label class="casilla"
+          ><input id="legal-acepto" type="checkbox" />
+          <span data-t="html.acepto">Leí y acepto los términos y la política de privacidad</span></label
+        >
+        <div class="acciones">
+          <button value="cancelar" formnovalidate data-t="html.cancelar">Cancelar</button>
+          <button id="legal-ok" value="ok" class="principal" disabled data-t="html.aceptar">Aceptar</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="dialogo-datos" aria-labelledby="datos-titulo">
+      <form method="dialog">
+        <h2 id="datos-titulo" data-t="html.misDatos">Mis datos</h2>
+        <p data-t="html.datosTexto">
+          Puedes bajar todo lo que Tacazo guarda de ti, o borrar tu jugador. Borrarlo quita tu nombre, rating,
+          amigos, monedas y cosméticos, y no se puede deshacer.
+        </p>
+        <button id="datos-bajar" type="button" data-t="html.datosBajar">Descargar mis datos</button>
+        <label for="datos-confirmar" data-t="html.datosConfirmar">Para borrar, escribe BORRAR</label>
+        <input id="datos-confirmar" autocomplete="off" spellcheck="false" />
+        <button id="datos-borrar" type="button" class="peligro" disabled data-t="html.datosBorrar">
+          Borrar mi jugador
+        </button>
+        <p id="datos-estado" class="nota" role="status"></p>
+        <div class="acciones">
+          <button value="cerrar" data-t="html.cerrar">Cerrar</button>
         </div>
       </form>
     </dialog>
