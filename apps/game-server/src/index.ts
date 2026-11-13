@@ -31,7 +31,15 @@ const datos = base ? datosPg(base) : null;
 const alertar = crearAlertas({ servicio: "partidas", webhook: process.env.TACAZO_ALERTAS_WEBHOOK });
 vigilarProceso(alertar);
 
-const servidor = new ServidorPartidas({ secreto, origenes, datos, alertar });
+// Solo para pruebas de carga en local; en producción se ignora.
+const salasPorMinuto = produccion ? undefined : Number(process.env.TACAZO_SALAS_POR_MINUTO) || undefined;
+const servidor = new ServidorPartidas({
+  secreto,
+  origenes,
+  datos,
+  alertar,
+  ...(salasPorMinuto ? { salasPorMinuto } : {}),
+});
 const p = await servidor.escuchar(puerto);
 setInterval(() => servidor.limpiar(), 60_000).unref();
 setInterval(() => servidor.emparejar(), 1_000).unref();

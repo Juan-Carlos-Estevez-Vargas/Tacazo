@@ -26,6 +26,8 @@ export interface Config {
   readonly datos?: Datos | null;
   /** A quién avisar de los errores con monedas o partidas (por defecto, solo al log). */
   readonly alertar?: Alertar;
+  /** Salas que puede crear una IP por minuto (20). Solo se sube para pruebas de carga. */
+  readonly salasPorMinuto?: number;
 }
 
 const emparejado = (e: Extract<EstadoCola, { tipo: "emparejado" }>) => ({
@@ -118,7 +120,7 @@ export class ServidorPartidas {
   readonly http: Server;
   private readonly ws: WebSocketServer;
   private readonly reloj: Reloj;
-  private readonly crearPorIp = new LimitePorClave(20, 60_000);
+  private readonly crearPorIp: LimitePorClave;
   readonly colas = new Colas();
   private readonly enCola = new Map<string, EstadoCola>();
   /** Partidas guardadas en la base: quién se sentó en cada silla. */
@@ -132,6 +134,7 @@ export class ServidorPartidas {
   constructor(private readonly config: Config) {
     this.reloj = config.reloj ?? relojReal;
     this.alertar = config.alertar ?? crearAlertas({ servicio: "partidas" });
+    this.crearPorIp = new LimitePorClave(config.salasPorMinuto ?? 20, 60_000);
     this.http = createServer((req, res) => void this.atender(req, res));
     // Cortar peticiones lentas a propósito (slowloris).
     this.http.requestTimeout = 10_000;
