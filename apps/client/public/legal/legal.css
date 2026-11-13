@@ -1,0 +1,86 @@
+:root {
+  color-scheme: light dark;
+  --fondo: #f7f5ee;
+  --texto: #0b1512;
+  --tenue: #4a5a54;
+  --acento: #0e5a45;
+  --borde: #d8d4c6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #0b1512;
+    --texto: #f7f5ee;
+    --tenue: #9fb3ab;
+    --acento: #e0a845;
+    --borde: #1f332c;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font:
+    17px/1.6 "Atkinson Hyperlegible",
+    system-ui,
+    sans-serif;
+}
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem 16px 4rem;
+}
+h1,
+h2 {
+  font-family: "Anybody", "Arial Black", system-ui, sans-serif;
+  line-height: 1.2;
+}
+h1 {
+  font-size: 2rem;
+  margin: 1rem 0 0.25rem;
+}
+h2 {
+  font-size: 1.25rem;
+  margin-top: 2.25rem;
+  border-top: 1px solid var(--borde);
+  padding-top: 1.25rem;
+}
+a {
+  color: var(--acento);
+}
+.version {
+  color: var(--tenue);
+  margin: 0 0 1.5rem;
+}
+.resumen {
+  border-left: 4px solid var(--acento);
+  padding: 0.25rem 1rem;
+  margin: 1.5rem 0;
+}
+.pendiente {
+  background: #ffe08a;
+  color: #0b1512;
+  padding: 0 0.25rem;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+}
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--borde);
+  padding: 0.5rem 0.5rem 0.5rem 0;
+}
+.tabla {
+  overflow-x: auto;
+}
+nav {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}

@@ -7,7 +7,7 @@
  * (`inv.…`) o un JWT de Neon Auth ya vinculado a un jugador.
  */
 import cors from "@fastify/cors";
-import { ENGINE_VERSION } from "@tacazo/core";
+import { EDADES, ENGINE_VERSION, LEGAL } from "@tacazo/core";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
@@ -51,6 +51,14 @@ import {
   type Equipado,
 } from "./monedas.js";
 import { crearAlertas, type Alertar } from "./alertas.js";
+import {
+  AceptacionInvalida,
+  borrarJugador,
+  estadoLegal,
+  exportarDatos,
+  jugadorVivo,
+  registrarAceptacion,
+} from "./legal.js";
 import { MODOS, tablaAmigos, tablaGlobal, tablaPais } from "./ranking.js";
 
 export interface OpcionesApi {
@@ -76,13 +84,23 @@ const Pais = z
   .nullable();
 const Region = z.enum(REGIONES);
 
+const Acepta = z.strictObject({
+  terminos: z.string().max(20),
+  privacidad: z.string().max(20),
+  edad: z.enum(EDADES),
+  autorizacion: z.boolean().default(false),
+});
+
 const esquemas = {
   invitado: z.strictObject({
     nombre: z.string().max(60),
     pais: Pais.default(null),
     region: Region.default("sa"),
     turnstile: z.string().max(2048).default(""),
+    acepta: Acepta,
   }),
+  acepta: Acepta,
+  borrar: z.strictObject({ confirmar: z.literal("BORRAR") }),
   vincular: z.strictObject({ jwt: z.string().min(10).max(8192) }),
   perfil: z.strictObject({
     nombre: z.string().max(60).optional(),
@@ -128,7 +146,7 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
   const ahora = o.ahora ?? Date.now;
   const clavesAnuncio = o.clavesAnuncio ?? clavesAdmob();
   const app = Fastify({ bodyLimit: 16 * 1024, logger: false, trustProxy: true });
-  await app.register(cors, { origin: [...o.origenes], methods: ["GET", "POST", "PATCH"] });
+  await app.register(cors, { origin: [...o.origenes], methods: ["GET", "POST", "PATCH", "DELETE"] });
 
   // Límite simple por IP y minuto.
   const cuentas = new Map<string, { n: number; desde: number }>();
@@ -145,6 +163,7 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
   const alertar = o.alertar ?? crearAlertas({ servicio: "api" });
   app.setErrorHandler((e: unknown, req, res) => {
     if (e instanceof ErrorApi) return res.code(e.estado).send({ error: e.codigo, mensaje: e.message });
+    if (e instanceof AceptacionInvalida) return res.code(400).send({ error: "legal", mensaje: e.message });
     if (e instanceof SaldoInsuficiente) return res.code(409).send({ error: "saldo", mensaje: e.message });
     if (e instanceof z.ZodError) return res.code(400).send({ error: "datos", mensaje: "Datos inválidos" });
     const err = e as { statusCode?: number; message?: string };
@@ -171,7 +190,8 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
     if (!t) throw new ErrorApi(401, "sesion", "Falta la sesión");
     if (t.startsWith("inv.")) {
       const j = leerInvitado(t, o.secreto, ahora());
-      if (!j) throw new ErrorApi(401, "sesion", "Sesión inválida o vencida");
+      if (!j || !(await jugadorVivo(o.base, j)))
+        throw new ErrorApi(401, "sesion", "Sesión inválida o vencida");
       return j;
     }
     const cuenta = await o.verificarCuenta(t);
@@ -206,7 +226,8 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
 
   app.post("/cuenta/vincular", async (req) => {
     const t = bearer(req);
-    const invitado = t ? leerInvitado(t, o.secreto, ahora()) : null;
+    const leido = t ? leerInvitado(t, o.secreto, ahora()) : null;
+    const invitado = leido && (await jugadorVivo(o.base, leido)) ? leido : null;
     if (!invitado) throw new ErrorApi(401, "sesion", "Hace falta la sesión de invitado");
     const { jwt } = esquemas.vincular.parse(req.body);
     const cuenta = await o.verificarCuenta(jwt);
@@ -234,8 +255,36 @@ export async function crearApi(o: OpcionesApi): Promise<FastifyInstance> {
         "SELECT modo, visible, partidas FROM ratings WHERE jugador = $1 ORDER BY modo",
         [j],
       );
-      return { ...rows[0], ratings };
+      return { ...rows[0], ratings, legal: await estadoLegal(c, j) };
     });
+  });
+
+  // ---------- Legal (Ley 1581): aceptar, consultar y borrar ----------
+
+  app.get("/legal", async () => LEGAL);
+
+  /** Vuelve a aceptar cuando cambia una versión. */
+  app.post("/yo/consentimientos", async (req, res) => {
+    const j = await quien(req);
+    const d = esquemas.acepta.parse(req.body);
+    await comoJugador(o.base, j, (c) => registrarAceptacion(c, j, d));
+    return res.code(201).send(await comoJugador(o.base, j, (c) => estadoLegal(c, j)));
+  });
+
+  app.get("/yo/datos", async (req, res) => {
+    const j = await quien(req);
+    const datos = await exportarDatos(o.base, j, ahora());
+    return res
+      .header("Content-Disposition", 'attachment; filename="tacazo-mis-datos.json"')
+      .header("Cache-Control", "no-store")
+      .send(datos);
+  });
+
+  app.delete("/yo", async (req, res) => {
+    const j = await quien(req);
+    esquemas.borrar.parse(req.body);
+    await borrarJugador(o.base, j);
+    return res.code(204).send();
   });
 
   app.patch("/yo", async (req) => {

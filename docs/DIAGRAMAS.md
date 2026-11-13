@@ -78,6 +78,7 @@ erDiagram
   JUGADORES ||--o{ RATINGS : "uno por modo"
   JUGADORES ||--o{ PARTIDAS : juega
   JUGADORES ||--o{ AMISTADES : tiene
+  JUGADORES ||--o{ CONSENTIMIENTOS : "acepta (inmutable)"
   JUGADORES {
     uuid id
     text nombre
@@ -85,6 +86,15 @@ erDiagram
     text region
     boolean invitado
     text cuenta "privada"
+    timestamptz borrado "Ley 1581"
+  }
+  CONSENTIMIENTOS {
+    uuid jugador
+    text documento "terminos o privacidad"
+    text version
+    text edad "14-17 o 18+"
+    boolean autorizacion_acudiente
+    timestamptz aceptado
   }
   RATINGS {
     uuid jugador

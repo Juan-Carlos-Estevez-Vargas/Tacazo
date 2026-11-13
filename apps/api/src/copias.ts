@@ -21,6 +21,7 @@ export const TABLAS = [
   "movimientos",
   "asientos",
   "inventario",
+  "consentimientos",
 ] as const;
 
 export interface InformeCopia {

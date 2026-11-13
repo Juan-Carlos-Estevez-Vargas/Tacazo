@@ -1,3 +1,4 @@
+import type { Edad } from "@tacazo/core";
 import { delServidor, msg } from "./i18n/index.js";
 import { urlServidor, type Asiento } from "./red.js";
 
@@ -77,18 +78,71 @@ async function json<T>(r: Response): Promise<T> {
 
 export const hayInvitado = (): boolean => leerInvitado() !== null;
 
-/** El invitado de este navegador; lo crea la primera vez. */
-export async function invitado(nombre: string): Promise<Invitado> {
+/** Lo que el jugador acepta: versiones vigentes, rango de edad y, si es menor, la autorización. */
+export interface Acepta {
+  readonly terminos: string;
+  readonly privacidad: string;
+  readonly edad: Edad;
+  readonly autorizacion: boolean;
+}
+
+/** El invitado de este navegador; lo crea la primera vez, con su aceptación. */
+export async function invitado(nombre: string, acepta: Acepta | null): Promise<Invitado> {
   const ya = leerInvitado();
   if (ya) return ya;
+  if (!acepta) throw new Error(msg().codigos.legal!);
   const r = await fetch(`${urlApi()}/invitados`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nombre, turnstile: await tokenHumano() }),
+    body: JSON.stringify({ nombre, turnstile: await tokenHumano(), acepta }),
   });
   const nuevo = await json<Invitado>(r);
   guardarInvitado(nuevo);
   return nuevo;
+}
+
+/** El invitado guardado, sin crearlo. */
+export const invitadoGuardado = leerInvitado;
+
+function olvidarInvitado(): void {
+  try {
+    localStorage.removeItem(CLAVE);
+  } catch {
+    // Nada que hacer.
+  }
+}
+
+/** Si falta aceptar alguna versión vigente de los textos legales. */
+export async function legalPendiente(i: Invitado): Promise<boolean> {
+  const r = await fetch(`${urlApi()}/yo`, conSesion(i));
+  return (await json<{ legal?: { pendiente: boolean } }>(r)).legal?.pendiente ?? true;
+}
+
+export async function aceptarLegal(i: Invitado, acepta: Acepta): Promise<void> {
+  const r = await fetch(`${urlApi()}/yo/consentimientos`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${i.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(acepta),
+  });
+  await json(r);
+}
+
+/** Todos los datos del jugador, como archivo para descargar. */
+export async function misDatos(i: Invitado): Promise<Blob> {
+  const r = await fetch(`${urlApi()}/yo/datos`, conSesion(i));
+  if (!r.ok) await json(r);
+  return r.blob();
+}
+
+/** Borra el jugador en el servidor y olvida la sesión en este navegador. */
+export async function borrarJugador(i: Invitado): Promise<void> {
+  const r = await fetch(`${urlApi()}/yo`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${i.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ confirmar: "BORRAR" }),
+  });
+  if (!r.ok) await json(r);
+  olvidarInvitado();
 }
 
 /** Token corto para el servidor de partidas. */
@@ -97,14 +151,8 @@ export async function sesionJuego(i: Invitado): Promise<string> {
     method: "POST",
     headers: { Authorization: `Bearer ${i.token}` },
   });
-  if (r.status === 401) {
-    // El token guardado ya no vale (por ejemplo, otra base de datos): se olvida.
-    try {
-      localStorage.removeItem(CLAVE);
-    } catch {
-      // Nada que hacer.
-    }
-  }
+  // El token guardado ya no vale (por ejemplo, otra base de datos): se olvida.
+  if (r.status === 401) olvidarInvitado();
   return (await json<{ token: string }>(r)).token;
 }
 

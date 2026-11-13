@@ -9,6 +9,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 import { comoRol, type Base } from "./db.js";
+import { registrarAceptacion, type Aceptacion } from "./legal.js";
 
 const PREFIJO = "inv";
 /** Un invitado dura un año sin entrar; cada visita renueva el token. */
@@ -88,14 +89,17 @@ const comoCuentas = <T>(base: Base, fn: Parameters<typeof comoRol<T>>[3]) =>
 
 export async function crearInvitado(
   base: Base,
-  datos: { nombre: string; pais: string | null; region: (typeof REGIONES)[number] },
+  datos: { nombre: string; pais: string | null; region: (typeof REGIONES)[number]; acepta: Aceptacion },
 ): Promise<string> {
+  // El jugador y su aceptación entran juntos: no hay jugador sin autorización.
   return comoCuentas(base, async (c) => {
     const { rows } = await c.query<{ id: string }>(
       "INSERT INTO jugadores (nombre, pais, region) VALUES ($1, $2, $3) RETURNING id",
       [limpiarNombre(datos.nombre), datos.pais, datos.region],
     );
-    return rows[0]!.id;
+    const id = rows[0]!.id;
+    await registrarAceptacion(c, id, datos.acepta);
+    return id;
   });
 }
 

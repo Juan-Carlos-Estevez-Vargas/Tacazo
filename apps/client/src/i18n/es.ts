@@ -44,6 +44,29 @@ export const es = {
     segunIntereses: "Según mis intereses",
     anunciosGenerales: "Anuncios generales",
     mesa: "Mesa de billar",
+    legal: "Legal",
+    terminos: "Términos",
+    politicaPrivacidad: "Política de privacidad",
+    misDatos: "Mis datos",
+    legalTitulo: "Antes de jugar",
+    legalCambio: "Cambiaron los términos o la política de privacidad. Léelos y acéptalos para seguir.",
+    legalLee: "Lee los",
+    y: "y la",
+    edadPregunta: "¿Cuántos años tienes?",
+    edadMenos14: "Menos de 14",
+    edad14a17: "De 14 a 17",
+    edad18: "18 o más",
+    edadMinima:
+      "Tacazo es para personas de 14 años o más. Puedes jugar contra el bot o con un amigo por enlace.",
+    autorizacion: "Mi madre, padre o acudiente leyó y autorizó esto",
+    acepto: "Leí y acepto los términos y la política de privacidad",
+    aceptar: "Aceptar",
+    datosTexto:
+      "Puedes bajar todo lo que Tacazo guarda de ti, o borrar tu jugador. Borrarlo quita tu nombre, rating, amigos, monedas y cosméticos, y no se puede deshacer.",
+    datosBajar: "Descargar mis datos",
+    datosConfirmar: "Para borrar, escribe BORRAR",
+    datosBorrar: "Borrar mi jugador",
+    cerrar: "Cerrar",
   },
   comun: {
     tu: "Tú",
@@ -137,12 +160,17 @@ export const es = {
     tiro: (nombre: string, faltas: string | null): string =>
       faltas ? `${nombre} · falta: ${faltas}` : nombre,
   },
+  datos: {
+    borrado: "Tu jugador fue borrado. Gracias por jugar.",
+    bajando: "Preparando el archivo…",
+  },
   verificacion: {
     noCargar: "No se pudo cargar la verificación",
     noHumano: "No pudimos comprobar que eres una persona",
   },
   /** Errores del servidor por código (`error` del mensaje o del JSON). */
   codigos: {
+    legal: "Los términos cambiaron. Recarga la página.",
     version: "Hay una versión nueva de Tacazo. Actualiza la página.",
     token: "La invitación no es válida o venció.",
     sala: "La sala no existe o ya terminó.",
