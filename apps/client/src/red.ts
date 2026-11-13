@@ -1,4 +1,5 @@
 import { ENGINE_VERSION, PROTOCOLO, type MensajeCliente, type MensajeServidor } from "@tacazo/core";
+import { delServidor, msg } from "./i18n/index.js";
 
 /** Dirección del servidor de partidas: meta `tacazo-servidor` o el puerto 2567 del mismo host. */
 export function urlServidor(): string {
@@ -18,9 +19,9 @@ async function pedir(ruta: string, cuerpo: unknown): Promise<Asiento> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(cuerpo),
   });
-  const datos = (await r.json().catch(() => ({}))) as Partial<Asiento> & { error?: string };
+  const datos = (await r.json().catch(() => ({}))) as Partial<Asiento> & { error?: string; codigo?: string };
   if (!r.ok || !datos.token || !datos.sala || datos.jugador === undefined)
-    throw new Error(datos.error ?? "No se pudo conectar con el servidor");
+    throw new Error(datos.error ? delServidor(datos.error, datos.codigo) : msg().comun.sinConexionServidor);
   return { sala: datos.sala, jugador: datos.jugador, token: datos.token };
 }
 
@@ -100,6 +101,6 @@ export class Red {
 
   cerrar(): void {
     this.cerradaAPropósito = true;
-    this.ws?.close(1000, "Salió");
+    this.ws?.close(1000, "fin");
   }
 }

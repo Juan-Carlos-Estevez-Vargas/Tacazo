@@ -1,5 +1,6 @@
 import type { TableSpec } from "@tacazo/core";
 import { Application, Container, Graphics, Text, type FederatedPointerEvent } from "pixi.js";
+import { msg } from "./i18n/index.js";
 import { BOLAS_POOL, COLORES, FUENTES } from "./marca.js";
 import type { Guia } from "./guia.js";
 
@@ -40,7 +41,8 @@ export class VistaMesa {
       resolution: Math.min(window.devicePixelRatio || 1, 2),
       autoDensity: true,
     });
-    this.app.canvas.setAttribute("aria-label", "Mesa de billar");
+    this.app.canvas.setAttribute("aria-label", msg().html.mesa);
+    this.app.canvas.dataset.tAria = "html.mesa";
     contenedor.appendChild(this.app.canvas);
     this.app.stage.addChild(this.marco);
     this.marco.addChild(this.raiz);

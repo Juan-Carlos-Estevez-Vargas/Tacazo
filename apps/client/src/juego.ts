@@ -35,6 +35,16 @@ import { Red, asientoGuardado, crearSala, unirseSala, urlServidor, type Asiento 
 import { Grabacion, eventosEnTiempo } from "./reproduccion.js";
 import { Sonido } from "./sonido.js";
 import { Anuncios } from "./anuncios.js";
+import {
+  alCambiarIdioma,
+  cambiarIdioma,
+  delServidor,
+  IDIOMAS,
+  idioma,
+  msg,
+  numero,
+  type Idioma,
+} from "./i18n/index.js";
 
 type Modo = "bot" | "red" | "repeticion";
 
@@ -50,22 +60,8 @@ interface TacazoNativo {
 type Fase = "apuntando" | "animando" | "rival" | "esperando" | "fin";
 type Jugador = 0 | 1;
 
-const FALTAS: Record<bola8.Foul, string> = {
-  "blanca-en-tronera": "la blanca cayó",
-  "sin-contacto": "no tocó ninguna bola",
-  "primera-bola-incorrecta": "tocó primero una bola que no era",
-  "sin-banda": "ninguna bola tocó banda",
-  "saque-ilegal": "saque ilegal",
-  tiempo: "se acabó el tiempo",
-};
-
-const DERROTAS: Record<bola8.LossReason, string> = {
-  "8-antes-de-tiempo": "metió la 8 antes de tiempo",
-  "8-en-otra-tronera": "metió la 8 en otra tronera",
-  "8-con-falta": "metió la 8 con falta",
-  "8-sin-cantar": "metió la 8 sin cantar tronera",
-  abandono: "abandonó la partida",
-};
+/** Faltas en el idioma activo, separadas por comas. */
+const faltas = (fs: readonly bola8.Foul[]): string => fs.map((f) => msg().faltas[f]).join(", ");
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -73,6 +69,22 @@ function semilla(): number {
   const a = new Uint32Array(1);
   crypto.getRandomValues(a);
   return a[0]!;
+}
+
+function leerPreferencia(clave: string): string | null {
+  try {
+    return localStorage.getItem(clave);
+  } catch {
+    return null;
+  }
+}
+
+function guardarPreferencia(clave: string, valor: string): void {
+  try {
+    localStorage.setItem(clave, valor);
+  } catch {
+    // Sin almacenamiento, la preferencia dura solo esta visita.
+  }
 }
 
 function leerNombre(): string {
@@ -102,7 +114,7 @@ export class Juego {
   private faseActual: Fase = "apuntando";
   private anuncios: Anuncios | null = null;
   private yo: Jugador = 0;
-  private nombres: [string, string] = ["Tú", "Bot"];
+  private nombres: [string, string] = [msg().comun.tu, msg().comun.bot];
   private conectados: [boolean, boolean] = [true, true];
   private angulo = 0;
   private potencia = 0;
@@ -180,7 +192,7 @@ export class Juego {
     this.salirDeLaRed();
     this.modo = "bot";
     this.yo = 0;
-    this.nombres = ["Tú", "Bot"];
+    this.nombres = [msg().comun.tu, msg().comun.bot];
     this.conectados = [true, true];
     this.rng = createRng(semilla());
     this.inicio = rack8(POOL_9FT, this.rng);
@@ -192,7 +204,7 @@ export class Juego {
     this.angulo = 0;
     this.turnoVence = null;
     this.mostrarRepeticion(false);
-    this.aviso("Tu saque. Puedes mover la blanca detrás de la línea.");
+    this.aviso(msg().juego.saque);
     this.redibujar();
   }
 
@@ -213,7 +225,7 @@ export class Juego {
       this.conectarA(a);
       this.mostrarEnlace(a.sala);
     } catch (e) {
-      this.aviso(e instanceof Error ? e.message : "No se pudo crear la partida");
+      this.aviso(e instanceof Error ? e.message : msg().juego.noCrear);
     }
   }
 
@@ -222,9 +234,9 @@ export class Juego {
   /** Entra a la cola clasificatoria y, al encontrar rival, se sienta en la sala. */
   async jugarClasificatoria(): Promise<void> {
     if (this.cancelarBusqueda) return;
-    let nombre = "Invitado";
+    let nombre = msg().comun.invitado;
     if (!hayInvitado()) {
-      const n = await this.pedirNombre("Partida clasificatoria");
+      const n = await this.pedirNombre(msg().cola.titulo);
       if (n === null) return;
       nombre = n;
     }
@@ -236,14 +248,14 @@ export class Juego {
       this.anuncios?.ponerEn(this.fase === "fin" ? "menu" : "mesa");
     };
     try {
-      texto.textContent = "Preparando tu jugador…";
+      texto.textContent = msg().cola.preparando;
       panel.hidden = false;
       this.cancelarBusqueda = terminar;
       const yo = await invitado(nombre);
       panel.hidden = true;
       const sala = await this.elegirSala(yo);
       if (sala === null || !this.cancelarBusqueda) return terminar();
-      texto.textContent = "Entrando a la cola…";
+      texto.textContent = msg().cola.entrando;
       panel.hidden = false;
       // Mientras espera rival está en un menú: aquí sí puede ir la tarjeta.
       this.anuncios?.ponerEn("menu");
@@ -257,7 +269,7 @@ export class Juego {
           (e) => {
             if (e.estado === "buscando") {
               const s = Math.round((performance.now() - inicio) / 1000);
-              texto.textContent = `Buscando rival de tu nivel… ${s} s`;
+              texto.textContent = msg().cola.buscando(s);
               return;
             }
             terminar();
@@ -266,7 +278,7 @@ export class Juego {
             history.replaceState(null, "", `${location.pathname}?sala=${encodeURIComponent(a.sala)}`);
             $("enlace").hidden = true;
             this.conectarA(a);
-            this.aviso(`Rival encontrado: ${e.rival}`);
+            this.aviso(msg().cola.encontrado(e.rival));
           },
           (motivo) => {
             terminar();
@@ -280,7 +292,7 @@ export class Juego {
       })();
     } catch (e) {
       terminar();
-      this.aviso(e instanceof Error ? e.message : "No se pudo buscar rival");
+      this.aviso(e instanceof Error ? e.message : msg().cola.noBuscar);
     }
   }
 
@@ -290,7 +302,7 @@ export class Juego {
       this.conectarA(guardado);
       return;
     }
-    const nombre = await this.pedirNombre("Te invitaron a una partida");
+    const nombre = await this.pedirNombre(msg().juego.invitacion);
     if (nombre === null) {
       this.nuevaContraBot();
       return;
@@ -301,7 +313,7 @@ export class Juego {
       this.conectarA(a);
     } catch (e) {
       this.nuevaContraBot();
-      this.aviso(e instanceof Error ? e.message : "No se pudo entrar a la partida");
+      this.aviso(e instanceof Error ? e.message : msg().juego.noEntrar);
     }
   }
 
@@ -318,7 +330,7 @@ export class Juego {
       a,
       (m) => this.alMensaje(m),
       (e, motivo) => {
-        if (e === "caida") this.aviso("Se cayó la conexión. Reconectando…");
+        if (e === "caida") this.aviso(msg().juego.reconectando);
         if (e === "cerrada" && motivo) this.aviso(motivo);
       },
     );
@@ -353,7 +365,7 @@ export class Juego {
         this.cargar(m.estado);
         this.sonido.falta();
         this.aviso(
-          `A ${m.jugador === this.yo ? "ti" : this.nombres[m.jugador]} se le acabó el tiempo. ${this.textoTurno()}`,
+          `${msg().juego.seAcaboTiempo(m.jugador === this.yo ? null : this.nombres[m.jugador])} ${this.textoTurno()}`,
         );
         break;
       case "rechazo":
@@ -361,12 +373,12 @@ export class Juego {
           this.seq--;
           this.fase = "apuntando";
         }
-        this.aviso(m.motivo);
+        this.aviso(delServidor(m.motivo));
         this.redibujar();
         break;
       case "error":
         this.fase = "fin";
-        this.aviso(m.mensaje);
+        this.aviso(delServidor(m.mensaje, m.codigo));
         if (m.codigo === "version") $("version").hidden = false;
         break;
     }
@@ -378,23 +390,24 @@ export class Juego {
     for (const b of this.mundo.balls) b.onTable = e.bolas.find((x) => x.id === b.id)!.onTable;
     this.mundo.step = e.paso;
     this.estado = e.reglas;
-    this.nombres = [e.jugadores[0]?.nombre || "Jugador 1", e.jugadores[1]?.nombre || "Esperando…"];
+    this.nombres = [
+      e.jugadores[0]?.nombre || msg().comun.jugador(1),
+      e.jugadores[1]?.nombre || msg().comun.esperando,
+    ];
     // Una silla vacía no cuenta como desconectada.
     const conectado = (j: Snapshot["jugadores"][number] | undefined) => !j?.nombre || j.conectado;
     this.conectados = [conectado(e.jugadores[0]), conectado(e.jugadores[1])];
     this.turnoVence = e.turnoRestante === null ? null : performance.now() + e.turnoRestante;
     if (e.fase === "esperando") {
       this.fase = "esperando";
-      this.aviso("Esperando a tu amigo. Comparte el enlace.");
+      this.aviso(msg().juego.esperandoAmigo);
     } else if (e.fase === "terminada") {
       this.fase = "fin";
       this.anunciarFin(e.reglas, null);
     } else {
       this.fase = e.reglas.turn === this.yo ? "apuntando" : "rival";
       if (this.estado.ballInHand !== "no" && this.fase === "apuntando") this.dejarBlanca();
-      const caido = this.conectados[this.yo === 0 ? 1 : 0]
-        ? ""
-        : "Tu rival se desconectó; lo esperamos 60 s. ";
+      const caido = this.conectados[this.yo === 0 ? 1 : 0] ? "" : `${msg().juego.rivalCaido} `;
       this.aviso(caido + this.textoTurno());
       $("enlace").hidden = true;
     }
@@ -403,13 +416,14 @@ export class Juego {
 
   private textoTurno(): string {
     if (this.estado.turn === this.yo) {
-      const mano = this.estado.ballInHand !== "no" ? "Tienes bola en mano: arrastra la blanca. " : "";
-      const ocho = bola8.needsCall(this.estado, bola8.ballsOnTable(this.mundo))
-        ? "Te toca la 8: canta tronera. "
-        : "";
-      return `${mano}${ocho}${mano || ocho ? "" : "Tu turno."}`;
+      const t = msg().juego;
+      const partes = [
+        this.estado.ballInHand !== "no" ? t.bolaEnMano : "",
+        bola8.needsCall(this.estado, bola8.ballsOnTable(this.mundo)) ? t.cantaOcho : "",
+      ].filter(Boolean);
+      return partes.length ? partes.join(" ") : t.tuTurno;
     }
-    return `Turno de ${this.nombres[this.estado.turn]}…`;
+    return msg().juego.turnoDe(this.nombres[this.estado.turn]);
   }
 
   // ---------- Entrada ----------
@@ -428,7 +442,7 @@ export class Juego {
       const t = this.vista.troneraCerca(p);
       if (t !== null) {
         this.cantada = t;
-        this.aviso("Tronera cantada. Apunta y tira.");
+        this.aviso(msg().juego.cantada);
         this.redibujar();
         return;
       }
@@ -495,6 +509,51 @@ export class Juego {
       else this.redibujar();
     });
 
+    // Teclado: con la barra enfocada, mantener Espacio o Enter carga la fuerza y
+    // soltar tira. Flechas arriba y abajo la ajustan sin tirar; Escape la anula.
+    let cargando = 0;
+    const ponerPotencia = (v: number) => {
+      this.potencia = Math.max(0, Math.min(1, v));
+      relleno.style.setProperty("--p", String(this.potencia));
+      barra.setAttribute("aria-valuenow", String(Math.round(this.potencia * 100)));
+      this.redibujar();
+    };
+    const parar = () => {
+      clearInterval(cargando);
+      cargando = 0;
+    };
+    barra.addEventListener("keydown", (e) => {
+      if (!this.miTurno) return;
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        if (e.repeat || cargando) return;
+        this.sonido.despertar();
+        ponerPotencia(0);
+        // Llega al máximo en 1,5 s, sin importar cada cuánto corra el temporizador.
+        const desde = performance.now();
+        cargando = window.setInterval(() => ponerPotencia((performance.now() - desde) / 1500), 30);
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        ponerPotencia(this.potencia + (e.key === "ArrowUp" ? 0.05 : -0.05));
+      } else if (e.key === "Escape") {
+        parar();
+        ponerPotencia(0);
+      }
+    });
+    barra.addEventListener("keyup", (e) => {
+      if (e.key !== " " && e.key !== "Enter") return;
+      e.preventDefault();
+      const p = this.potencia;
+      parar();
+      ponerPotencia(0);
+      if (p >= 0.03 && this.miTurno) this.tirar(p);
+    });
+    barra.addEventListener("blur", () => {
+      parar();
+      ponerPotencia(0);
+    });
+
     const bola = $("efecto");
     const punto = $("efecto-punto");
     const ponerEfecto = (e: PointerEvent) => {
@@ -529,7 +588,7 @@ export class Juego {
     nivel.addEventListener("change", () => (this.nivel = nivel.value as BotLevel));
     $("nueva").addEventListener("click", () => this.nuevaContraBot());
     $("amigo").addEventListener("click", () => {
-      void this.pedirNombre("Jugar con un amigo").then((n) => {
+      void this.pedirNombre(msg().html.conAmigo).then((n) => {
         if (n !== null) void this.jugarConAmigo(n);
       });
     });
@@ -539,21 +598,57 @@ export class Juego {
     $("copiar-enlace").addEventListener("click", () => {
       const url = $<HTMLInputElement>("enlace-url").value;
       if (navigator.share)
-        void navigator.share({ title: "Tacazo", text: "¿Echamos una de bola 8?", url }).catch(() => {});
-      else
-        void navigator.clipboard
-          ?.writeText(url)
-          .then(() => this.aviso("Enlace copiado. Mándaselo a tu amigo."));
+        void navigator.share({ title: "Tacazo", text: msg().juego.compartirTexto, url }).catch(() => {});
+      else void navigator.clipboard?.writeText(url).then(() => this.aviso(msg().juego.enlaceCopiado));
     });
     const sonido = $<HTMLButtonElement>("sonido");
     sonido.addEventListener("click", () => {
       this.sonido.activo = !this.sonido.activo;
       sonido.setAttribute("aria-pressed", String(!this.sonido.activo));
-      sonido.textContent = this.sonido.activo ? "Sonido: sí" : "Sonido: no";
+      sonido.textContent = msg().comun.sonido(this.sonido.activo);
+    });
+    const pintarSonido = () => (sonido.textContent = msg().comun.sonido(this.sonido.activo));
+    pintarSonido();
+    alCambiarIdioma(() => {
+      pintarSonido();
+      this.redibujar();
+    });
+
+    // Idioma: selector nativo, se recuerda en el navegador.
+    const selector = $<HTMLSelectElement>("idioma");
+    selector.replaceChildren(
+      ...IDIOMAS.map((i) => {
+        const o = document.createElement("option");
+        o.value = i.codigo;
+        o.lang = i.codigo;
+        o.textContent = `🌐 ${i.nombre}`;
+        return o;
+      }),
+    );
+    selector.value = idioma();
+    selector.addEventListener("change", () => void cambiarIdioma(selector.value as Idioma));
+
+    // Bolas con número en el marcador (ayuda a quien confunde colores).
+    const daltonico = $<HTMLInputElement>("daltonico");
+    daltonico.checked = leerPreferencia("tacazo.daltonico") === "1";
+    document.body.classList.toggle("daltonico", daltonico.checked);
+    daltonico.addEventListener("change", () => {
+      document.body.classList.toggle("daltonico", daltonico.checked);
+      guardarPreferencia("tacazo.daltonico", daltonico.checked ? "1" : "0");
     });
 
     window.addEventListener("keydown", (e) => {
-      if (!this.miTurno || (e.target as HTMLElement).tagName === "INPUT") return;
+      const etiqueta = (e.target as HTMLElement).tagName;
+      if (!this.miTurno || etiqueta === "INPUT" || etiqueta === "SELECT") return;
+      // Teclas 1 a 6: cantar tronera de la 8 sin ratón.
+      const n = Number(e.key);
+      if (Number.isInteger(n) && n >= 1 && n <= POOL_9FT.pockets.length) {
+        if (!bola8.needsCall(this.estado, bola8.ballsOnTable(this.mundo))) return;
+        this.cantada = n - 1;
+        this.aviso(msg().juego.cantada);
+        this.redibujar();
+        return;
+      }
       const paso = e.shiftKey ? 0.001 : 0.01;
       if (e.key === "ArrowLeft") this.angulo += paso;
       else if (e.key === "ArrowRight") this.angulo -= paso;
@@ -568,9 +663,13 @@ export class Juego {
   private async elegirSala(yo: Invitado): Promise<string | null> {
     const m = await monedas(yo);
     const d = $<HTMLDialogElement>("dialogo-sala");
-    const fmt = (n: number) => n.toLocaleString("es-CO");
+    const fmt = numero;
+    const t = msg().sala;
     const pintarSaldo = (s: number) => {
-      $("saldo").textContent = fmt(s);
+      const [antes, cifra, despues] = t.saldo(fmt(s));
+      const fuerte = document.createElement("strong");
+      fuerte.textContent = cifra;
+      $("saldo-texto").replaceChildren(antes, fuerte, despues);
       for (const b of d.querySelectorAll<HTMLButtonElement>("button[data-entrada]"))
         b.disabled = s < Number(b.dataset.entrada);
     };
@@ -581,61 +680,59 @@ export class Juego {
         b.dataset.entrada = String(s.entrada);
         b.className = "sala";
         const n = document.createElement("strong");
-        n.textContent = s.nombre;
-        const t = document.createElement("span");
-        t.textContent = `Entrada ${fmt(s.entrada)} · Premio ${fmt(s.premio)}`;
-        b.append(n, t);
+        n.textContent = t.nombres[s.id] ?? s.nombre;
+        const precio = document.createElement("span");
+        precio.textContent = t.precio(fmt(s.entrada), fmt(s.premio));
+        b.append(n, precio);
         return b;
       }),
     );
     const diario = $<HTMLButtonElement>("diario");
     const horas = Math.ceil(m.diario.enMs / 3_600_000);
     diario.disabled = !m.diario.disponible;
-    diario.textContent = m.diario.disponible
-      ? `Cobrar premio del día (+${fmt(m.diario.monto)})`
-      : `Premio del día cobrado · vuelve en ${horas} h`;
+    diario.textContent = m.diario.disponible ? t.cobrarDiario(fmt(m.diario.monto)) : t.diarioCobrado(horas);
     diario.onclick = () => {
       diario.disabled = true;
       void cobrarDiario(yo)
         .then((s) => {
           pintarSaldo(s);
-          diario.textContent = "¡Premio cobrado!";
+          diario.textContent = t.premioCobrado;
         })
         .catch((e: unknown) => {
-          diario.textContent = e instanceof Error ? e.message : "No se pudo cobrar";
+          diario.textContent = e instanceof Error ? e.message : t.noCobrar;
         });
     };
     const anuncio = $<HTMLButtonElement>("anuncio-premio");
     const nativo = (window as unknown as { TacazoNativo?: TacazoNativo }).TacazoNativo;
     // En la web no hay forma de que la red confirme el anuncio al servidor: solo en la app.
     anuncio.hidden = !nativo || !m.anuncio.disponible;
-    anuncio.textContent = `Ver un anuncio y ganar ${fmt(m.anuncio.monto)} (quedan ${m.anuncio.restantes} hoy)`;
+    anuncio.textContent = t.verAnuncio(fmt(m.anuncio.monto), m.anuncio.restantes);
     anuncio.onclick = () => {
       if (!nativo) return;
       anuncio.disabled = true;
-      anuncio.textContent = "Cargando anuncio…";
+      anuncio.textContent = t.cargandoAnuncio;
       void nativo
         .anuncioConPremio(yo.jugador)
         .then(async (visto) => {
           if (!visto) {
-            anuncio.textContent = "El anuncio no se vio completo";
+            anuncio.textContent = t.anuncioIncompleto;
             return;
           }
           // El premio llega cuando la red de anuncios avisa al servidor.
-          anuncio.textContent = "Esperando la confirmación…";
+          anuncio.textContent = t.esperandoConfirmacion;
           for (let i = 0; i < 8; i++) {
             await new Promise((r) => setTimeout(r, 1000));
             const s = (await monedas(yo)).saldo;
             if (s > m.saldo) {
               pintarSaldo(s);
-              anuncio.textContent = `¡Listo! +${fmt(s - m.saldo)}`;
+              anuncio.textContent = t.listo(fmt(s - m.saldo));
               return;
             }
           }
-          anuncio.textContent = "Tu premio llegará en unos minutos";
+          anuncio.textContent = t.premioLlegara;
         })
         .catch(() => {
-          anuncio.textContent = "No se pudo mostrar el anuncio";
+          anuncio.textContent = t.noAnuncio;
         });
     };
     anuncio.disabled = false;
@@ -662,7 +759,7 @@ export class Juego {
         "close",
         () => {
           if (d.returnValue !== "ok") return ok(null);
-          const n = input.value.trim().slice(0, 20) || "Invitado";
+          const n = input.value.trim().slice(0, 20) || msg().comun.invitado;
           guardarNombre(n);
           ok(n);
         },
@@ -674,7 +771,7 @@ export class Juego {
   private mostrarEnlace(sala: string): void {
     const url = `${location.origin}${location.pathname}?sala=${encodeURIComponent(sala)}`;
     $<HTMLInputElement>("enlace-url").value = url;
-    $("copiar-enlace").textContent = "share" in navigator ? "Compartir" : "Copiar enlace";
+    $("copiar-enlace").textContent = "share" in navigator ? msg().html.compartir : msg().html.copiarEnlace;
     $("enlace").hidden = false;
   }
 
@@ -687,7 +784,7 @@ export class Juego {
   private tirar(potencia: number): void {
     const on = bola8.ballsOnTable(this.mundo);
     if (bola8.needsCall(this.estado, on) && this.cantada === null) {
-      this.aviso("Te toca la 8: toca la tronera donde la vas a meter.");
+      this.aviso(msg().juego.cantaOchoTocar);
       return;
     }
     const shot: Shot = {
@@ -784,20 +881,22 @@ export class Juego {
   }
 
   private nombreDe(j: Jugador): string {
-    return j === this.yo ? "Tú" : this.nombres[j];
+    return j === this.yo ? msg().comun.tu : this.nombres[j];
   }
 
   private mensajeVeredicto(v: Veredicto, nuevo: bola8.Bola8State, quien: Jugador): void {
-    let msg = "";
+    const t = msg().juego;
+    const partes: string[] = [];
     if (v.fouls.length) {
       this.sonido.falta();
-      msg = `Falta: ${v.fouls.map((f) => FALTAS[f]).join(", ")}. `;
+      partes.push(t.falta(faltas(v.fouls)));
     }
-    if (v.respot.includes(8)) msg += "La 8 vuelve al punto de pie. ";
+    if (v.respot.includes(8)) partes.push(t.ochoAlPunto);
     if (nuevo.phase === "terminada") return;
     if (nuevo.turn === this.yo) this.sonido.turno();
-    if (msg === "" && v.keepsTurn && quien === this.yo) msg = "¡Bien! Sigues tú. ";
-    this.aviso(msg + this.textoTurno());
+    if (!partes.length && v.keepsTurn && quien === this.yo) partes.push(t.sigues);
+    partes.push(this.textoTurno());
+    this.aviso(partes.join(" "));
   }
 
   private despues(v: bola8.ShotVerdict, nuevo: bola8.Bola8State, quien: Jugador): void {
@@ -826,9 +925,12 @@ export class Juego {
     if (gane) this.sonido.victoria();
     else this.sonido.falta();
     const perdedor = r.winner === null ? null : r.winner === 0 ? 1 : 0;
+    const t = msg().juego;
     const culpa =
-      r.loss && perdedor !== null ? ` ${this.nombreDe(quien ?? perdedor)} ${DERROTAS[r.loss]}.` : "";
-    const quienGana = gane ? "¡Ganaste!" : `Ganó ${r.winner === null ? "nadie" : this.nombres[r.winner]}.`;
+      r.loss && perdedor !== null
+        ? ` ${t.culpa(this.nombreDe(quien ?? perdedor), msg().derrotas[r.loss])}`
+        : "";
+    const quienGana = gane ? t.ganaste : t.gano(r.winner === null ? null : this.nombres[r.winner]);
     this.aviso(`${quienGana}${culpa}`);
     this.mostrarRepeticion(true);
   }
@@ -870,7 +972,7 @@ export class Juego {
         if (!r.ok) throw new Error();
         rep = (await r.json()) as Repeticion;
       } catch {
-        this.aviso("No se pudo descargar la repetición.");
+        this.aviso(msg().repeticion.noDescargar);
         return;
       }
     } else if (this.repeticion) rep = this.repeticion.rep;
@@ -891,13 +993,13 @@ export class Juego {
     this.salirDeLaRed();
     this.modo = "repeticion";
     this.yo = 0;
-    this.nombres = [rep.jugadores[0] || "Jugador 1", rep.jugadores[1] || "Jugador 2"];
+    this.nombres = [rep.jugadores[0] || msg().comun.jugador(1), rep.jugadores[1] || msg().comun.jugador(2)];
     this.mundo = createWorld(POOL_9FT, rep.inicio);
     this.estado = bola8.newGame(0);
     this.repeticion = { rep, i: 0, reglas: this.estado, huellasOk: true };
     this.turnoVence = null;
     this.mostrarRepeticion(false);
-    this.aviso("Repetición");
+    this.aviso(msg().repeticion.titulo);
     this.redibujar();
     setTimeout(() => this.siguienteDeRepeticion(), 800);
   }
@@ -908,9 +1010,7 @@ export class Juego {
     const e = r.rep.entradas[r.i++];
     if (!e) {
       this.fase = "fin";
-      this.aviso(
-        `Fin de la repetición.${r.huellasOk ? " Todas las huellas coinciden con el servidor." : ""}`,
-      );
+      this.aviso(`${msg().repeticion.fin}${r.huellasOk ? ` ${msg().repeticion.huellas}` : ""}`);
       this.mostrarRepeticion(true);
       this.redibujar();
       return;
@@ -918,7 +1018,8 @@ export class Juego {
     if (e.tipo !== "tiro") {
       this.estado =
         e.tipo === "tiempo" ? bola8.timeoutFoul(this.estado) : bola8.forfeit(this.estado, e.jugador);
-      this.aviso(`${this.nombres[e.jugador]}: ${e.tipo === "tiempo" ? "se acabó el tiempo" : "abandonó"}`);
+      const nombre = this.nombres[e.jugador];
+      this.aviso(e.tipo === "tiempo" ? msg().repeticion.tiempo(nombre) : msg().repeticion.abandono(nombre));
       this.redibujar();
       setTimeout(() => this.siguienteDeRepeticion(), 1200);
       return;
@@ -935,9 +1036,7 @@ export class Juego {
         for (const id of v.respot) bola8.spotBall(this.mundo, id);
         this.estado = v.state;
         this.fase = "rival";
-        this.aviso(
-          `${this.nombres[e.jugador]}${v.fouls.length ? ` · falta: ${v.fouls.map((f) => FALTAS[f]).join(", ")}` : ""}`,
-        );
+        this.aviso(msg().repeticion.tiro(this.nombres[e.jugador], v.fouls.length ? faltas(v.fouls) : null));
         this.redibujar();
         setTimeout(() => this.siguienteDeRepeticion(), 700);
       });
@@ -1005,7 +1104,7 @@ export class Juego {
       el.classList.toggle("activo", this.estado.turn === p && this.fase !== "fin");
       el.classList.toggle("caido", !this.conectados[p]);
       $(`j${p}-nombre`).textContent =
-        this.modo === "red" && p === this.yo ? `${this.nombres[p]} (tú)` : this.nombres[p];
+        this.modo === "red" && p === this.yo ? msg().comun.tuMarca(this.nombres[p]) : this.nombres[p];
       const g = this.estado.groups[p];
       const bolas = $(`j${p}-bolas`);
       bolas.replaceChildren();
@@ -1014,10 +1113,12 @@ export class Juego {
         const s = document.createElement("span");
         s.className = `ficha${id > 8 ? " raya" : ""}${on.includes(id) ? "" : " fuera"}`;
         s.style.setProperty("--c", BOLAS_POOL[(id > 8 ? id - 9 : id - 1) % 8]!);
-        s.title = `Bola ${id}`;
+        s.title = msg().comun.bola(id);
+        s.textContent = String(id);
         bolas.appendChild(s);
       }
-      $(`j${p}-grupo`).textContent = g === null ? "Mesa abierta" : g === "lisas" ? "Lisas" : "Rayadas";
+      const t = msg().marcador;
+      $(`j${p}-grupo`).textContent = g === null ? t.abierta : g === "lisas" ? t.lisas : t.rayadas;
     }
   }
 

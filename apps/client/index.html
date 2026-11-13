@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex" />
+    <meta
+      name="description"
+      content="Billar en línea gratis: bola 8 contra el bot, con amigos o en clasificatorias."
+    />
     <title>Tacazo</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#0B1512" />
@@ -104,6 +108,28 @@
       }
       .ficha.raya {
         background: linear-gradient(var(--marfil) 25%, var(--c) 25% 75%, var(--marfil) 75%);
+      }
+      .ficha {
+        display: inline-grid;
+        place-items: center;
+        font-size: 0;
+        color: #111;
+        font-family: var(--numeros);
+        font-weight: 700;
+      }
+      .daltonico .ficha {
+        width: 16px;
+        height: 16px;
+        font-size: 9px;
+        outline: 1px solid var(--marfil);
+      }
+      .daltonico .ficha.raya {
+        background:
+          radial-gradient(circle, var(--marfil) 45%, transparent 46%),
+          linear-gradient(var(--marfil) 25%, var(--c) 25% 75%, var(--marfil) 75%);
+      }
+      .daltonico .ficha:not(.raya) {
+        background: radial-gradient(circle, var(--marfil) 45%, var(--c) 46%);
       }
       .ficha.fuera {
         opacity: 0.18;
@@ -231,6 +257,9 @@
         min-height: 32px;
         width: 32px;
         padding: 0;
+      }
+      .casilla-pie {
+        color: var(--tenue);
       }
       .casilla {
         color: var(--marfil);
@@ -402,109 +431,145 @@
     <div id="app">
       <header>
         <div class="jugador" id="j0">
-          <span class="nombre" id="j0-nombre">Tú</span>
-          <span class="grupo" id="j0-grupo">Mesa abierta</span>
+          <span class="nombre" id="j0-nombre" data-t="comun.tu">Tú</span>
+          <span class="grupo" id="j0-grupo" data-t="marcador.abierta">Mesa abierta</span>
           <span class="bolas" id="j0-bolas"></span>
         </div>
         <div class="marca"><img src="/marca/tacazo-icono.svg" alt="" />Tacazo</div>
         <div class="jugador" id="j1">
-          <span class="nombre" id="j1-nombre">Bot</span>
-          <span class="grupo" id="j1-grupo">Mesa abierta</span>
+          <span class="nombre" id="j1-nombre" data-t="comun.bot">Bot</span>
+          <span class="grupo" id="j1-grupo" data-t="marcador.abierta">Mesa abierta</span>
           <span class="bolas" id="j1-bolas"></span>
         </div>
       </header>
       <div class="linea-aviso">
         <span id="aviso" role="status" aria-live="polite"></span>
-        <span id="reloj" hidden aria-label="Tiempo del turno"></span>
-        <button id="ver-repeticion" type="button" hidden>Ver repetición</button>
+        <span id="reloj" hidden aria-label="Tiempo del turno" data-t-aria="html.tiempoTurno"></span>
+        <button id="ver-repeticion" type="button" hidden data-t="html.verRepeticion">Ver repetición</button>
       </div>
       <div id="enlace" hidden>
-        <span>Mándale este enlace a tu amigo:</span>
-        <input id="enlace-url" readonly aria-label="Enlace de la partida" />
+        <span data-t="html.enlaceTexto">Mándale este enlace a tu amigo:</span>
+        <input id="enlace-url" readonly aria-label="Enlace de la partida" data-t-aria="html.enlacePartida" />
         <button id="copiar-enlace" type="button">Copiar enlace</button>
       </div>
       <div id="buscando" hidden>
-        <span id="buscando-texto" role="status" aria-live="polite">Buscando rival…</span>
-        <button id="cancelar-busqueda" type="button">Cancelar</button>
+        <span id="buscando-texto" role="status" aria-live="polite" data-t="html.buscandoRival"
+          >Buscando rival…</span
+        >
+        <button id="cancelar-busqueda" type="button" data-t="html.cancelar">Cancelar</button>
         <div id="turnstile" hidden></div>
       </div>
-      <aside id="anuncio" hidden aria-label="Publicidad">
-        <span class="anuncio-etiqueta">Publicidad</span>
+      <aside id="anuncio" hidden aria-label="Publicidad" data-t-aria="html.publicidad">
+        <span class="anuncio-etiqueta" data-t="html.publicidad">Publicidad</span>
         <div id="anuncio-caja"></div>
-        <button id="anuncio-cerrar" type="button" aria-label="Cerrar anuncio">×</button>
+        <button
+          id="anuncio-cerrar"
+          type="button"
+          aria-label="Cerrar anuncio"
+          data-t-aria="html.cerrarAnuncio"
+        >
+          ×
+        </button>
       </aside>
       <div id="version" hidden role="alert">
-        Hay una versión nueva de Tacazo. <button type="button" onclick="location.reload()">Actualizar</button>
+        <span data-t="html.versionNueva">Hay una versión nueva de Tacazo.</span>
+        <button type="button" onclick="location.reload()" data-t="html.actualizar">Actualizar</button>
       </div>
       <div id="mesa"></div>
       <footer>
-        <div id="efecto" title="Efecto: toca dónde le pega el taco. Doble toque para el centro.">
+        <div
+          id="efecto"
+          title="Efecto: toca dónde le pega el taco. Doble toque para el centro."
+          data-t-title="html.efecto"
+        >
           <span id="efecto-punto"></span>
         </div>
         <div
           id="potencia"
           role="slider"
           aria-label="Potencia: arrastra y suelta para tirar"
+          data-t-aria="html.potencia"
           aria-valuemin="0"
           aria-valuemax="100"
           aria-valuenow="0"
           tabindex="0"
         >
           <div id="potencia-relleno"></div>
-          <span>Arrastra y suelta para tirar</span>
+          <span data-t="html.potenciaTexto">Arrastra y suelta para tirar</span>
         </div>
-        <label>Inclinación <input id="inclinacion" type="range" min="0" max="70" value="0" /></label>
-        <select id="nivel" aria-label="Nivel del bot">
-          <option value="facil">Bot fácil</option>
-          <option value="medio" selected>Bot medio</option>
-          <option value="dificil">Bot difícil</option>
+        <label
+          ><span data-t="html.inclinacion">Inclinación</span>
+          <input id="inclinacion" type="range" min="0" max="70" value="0"
+        /></label>
+        <select id="nivel" aria-label="Nivel del bot" data-t-aria="html.nivelBot">
+          <option value="facil" data-t="html.botFacil">Bot fácil</option>
+          <option value="medio" selected data-t="html.botMedio">Bot medio</option>
+          <option value="dificil" data-t="html.botDificil">Bot difícil</option>
         </select>
-        <button id="nueva" type="button">Contra el bot</button>
-        <button id="amigo" type="button">Jugar con un amigo</button>
-        <button id="clasificatoria" type="button">Clasificatoria</button>
+        <button id="nueva" type="button" data-t="html.contraBot">Contra el bot</button>
+        <button id="amigo" type="button" data-t="html.conAmigo">Jugar con un amigo</button>
+        <button id="clasificatoria" type="button" data-t="html.clasificatoria">Clasificatoria</button>
         <button id="sonido" type="button" aria-pressed="false">Sonido: sí</button>
-        <button id="privacidad" type="button" hidden>Privacidad</button>
+        <button id="privacidad" type="button" hidden data-t="html.privacidad">Privacidad</button>
+        <label class="casilla-pie"
+          ><input id="daltonico" type="checkbox" />
+          <span data-t="html.daltonico">Bolas con número</span></label
+        >
+        <select id="idioma" aria-label="Idioma" data-t-aria="html.idioma"></select>
       </footer>
     </div>
     <dialog id="dialogo-nombre">
       <form method="dialog">
         <h2 id="dialogo-titulo">Jugar con un amigo</h2>
-        <label for="nombre">Tu nombre</label>
-        <input id="nombre" maxlength="20" autocomplete="nickname" placeholder="Invitado" />
+        <label for="nombre" data-t="html.tuNombre">Tu nombre</label>
+        <input
+          id="nombre"
+          maxlength="20"
+          autocomplete="nickname"
+          placeholder="Invitado"
+          data-t-placeholder="comun.invitado"
+        />
         <div class="acciones">
-          <button value="cancelar" formnovalidate>Cancelar</button>
-          <button value="ok" class="principal">Entrar</button>
+          <button value="cancelar" formnovalidate data-t="html.cancelar">Cancelar</button>
+          <button value="ok" class="principal" data-t="html.entrar">Entrar</button>
         </div>
       </form>
     </dialog>
     <dialog id="dialogo-sala" aria-labelledby="sala-titulo">
       <form method="dialog">
-        <h2 id="sala-titulo">Clasificatoria</h2>
-        <p class="saldo">Tienes <strong id="saldo">0</strong> monedas</p>
+        <h2 id="sala-titulo" data-t="html.clasificatoria">Clasificatoria</h2>
+        <p class="saldo" id="saldo-texto"></p>
         <div id="salas" class="salas"></div>
         <button id="diario" type="button"></button>
         <button id="anuncio-premio" type="button" hidden></button>
-        <p class="nota">El ganador se lleva el premio. Las monedas no se compran: se ganan jugando.</p>
+        <p class="nota" data-t="html.nota">
+          El ganador se lleva el premio. Las monedas no se compran: se ganan jugando.
+        </p>
         <div class="acciones">
-          <button value="cancelar" formnovalidate>Cancelar</button>
+          <button value="cancelar" formnovalidate data-t="html.cancelar">Cancelar</button>
         </div>
       </form>
     </dialog>
     <dialog id="dialogo-anuncios" aria-labelledby="anuncios-titulo">
       <form method="dialog">
-        <h2 id="anuncios-titulo">Anuncios y privacidad</h2>
-        <p>
+        <h2 id="anuncios-titulo" data-t="html.anunciosTitulo">Anuncios y privacidad</h2>
+        <p data-t="html.anunciosTexto">
           Tacazo es gratis gracias a anuncios pequeños que solo salen en los menús, nunca mientras juegas.
           ¿Qué anuncios prefieres?
         </p>
-        <label class="casilla"><input id="anuncios-menor" type="checkbox" /> Tengo menos de 18 años</label>
-        <p class="nota">
+        <label class="casilla"
+          ><input id="anuncios-menor" type="checkbox" />
+          <span data-t="html.menorDeEdad">Tengo menos de 18 años</span></label
+        >
+        <p class="nota" data-t="html.anunciosNota">
           «Según mis intereses» deja que Google use cookies para elegirlos. Si eres menor de edad siempre
           verás anuncios generales. Puedes cambiarlo cuando quieras en Privacidad.
         </p>
         <div class="acciones">
-          <button value="intereses">Según mis intereses</button>
-          <button value="generales" class="principal">Anuncios generales</button>
+          <button value="intereses" data-t="html.segunIntereses">Según mis intereses</button>
+          <button value="generales" class="principal" data-t="html.anunciosGenerales">
+            Anuncios generales
+          </button>
         </div>
       </form>
     </dialog>

@@ -1,3 +1,4 @@
+import { delServidor, msg } from "./i18n/index.js";
 import { urlServidor, type Asiento } from "./red.js";
 
 /** Dirección de la API: meta `tacazo-api` o el puerto 3000 del mismo host. */
@@ -47,7 +48,7 @@ async function tokenHumano(): Promise<string> {
       s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
       s.async = true;
       s.onload = () => ok();
-      s.onerror = () => mal(new Error("No se pudo cargar la verificación"));
+      s.onerror = () => mal(new Error(msg().verificacion.noCargar));
       document.head.append(s);
     });
   }
@@ -58,7 +59,7 @@ async function tokenHumano(): Promise<string> {
       w.turnstile!.render(caja, {
         sitekey: sitio,
         callback: ok,
-        "error-callback": () => mal(new Error("No pudimos comprobar que eres una persona")),
+        "error-callback": () => mal(new Error(msg().verificacion.noHumano)),
       }),
     );
   } finally {
@@ -68,8 +69,9 @@ async function tokenHumano(): Promise<string> {
 }
 
 async function json<T>(r: Response): Promise<T> {
-  const d = (await r.json().catch(() => ({}))) as T & { error?: string; mensaje?: string };
-  if (!r.ok) throw new Error(d.mensaje ?? d.error ?? "No se pudo conectar");
+  const d = (await r.json().catch(() => ({}))) as T & { error?: string; mensaje?: string; codigo?: string };
+  // La API manda { error: código, mensaje }; el servidor de partidas, { error: texto, codigo? }.
+  if (!r.ok) throw new Error(d.mensaje ? delServidor(d.mensaje, d.error) : delServidor(d.error, d.codigo));
   return d;
 }
 
@@ -156,7 +158,7 @@ export function buscarRival(
       ...(cuerpo === undefined ? {} : { body: JSON.stringify(cuerpo) }),
     });
   const leer = async (r: Response) => {
-    const e = await json<EstadoBusqueda | { estado: "nada"; motivo?: string }>(r);
+    const e = await json<EstadoBusqueda | { estado: "nada"; motivo?: string; codigo?: string }>(r);
     if (!activo) return;
     if (e.estado === "emparejado") {
       activo = false;
@@ -165,7 +167,7 @@ export function buscarRival(
     }
     if (e.estado === "nada") {
       activo = false;
-      alFallar(e.motivo ?? "Saliste de la cola. Vuelve a buscar.");
+      alFallar(e.motivo ? delServidor(e.motivo, e.codigo) : msg().cola.saliste);
       return;
     }
     alCambiar(e);
@@ -174,7 +176,7 @@ export function buscarRival(
   const fallo = (e: unknown) => {
     if (!activo) return;
     activo = false;
-    alFallar(e instanceof Error ? e.message : "No se pudo buscar rival");
+    alFallar(e instanceof Error ? e.message : msg().cola.noBuscar);
   };
   void pedir("POST", { modo: "bola8", sala }).then(leer).catch(fallo);
   return () => {
