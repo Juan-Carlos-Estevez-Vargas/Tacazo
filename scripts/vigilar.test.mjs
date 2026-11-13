@@ -21,9 +21,9 @@ test("todo en orden no avisa", async () => {
 test("un servicio caído o con la base rota avisa al webhook", async () => {
   const avisos = [];
   const f = async (url, init) => {
-    const u = String(url);
-    if (u.startsWith("https://w.x")) return (avisos.push(JSON.parse(init.body).content), respuesta(204, {}));
-    if (u.startsWith("https://api.x")) return respuesta(503, { ok: false, base: false });
+    const host = new URL(url).host;
+    if (host === "w.x") return (avisos.push(JSON.parse(init.body).content), respuesta(204, {}));
+    if (host === "api.x") return respuesta(503, { ok: false, base: false });
     throw new Error("ECONNREFUSED");
   };
   const env = { TACAZO_URL_API: "https://api.x", TACAZO_URL_PARTIDAS: "https://p.x", TACAZO_ALERTAS_WEBHOOK: "https://w.x" };
