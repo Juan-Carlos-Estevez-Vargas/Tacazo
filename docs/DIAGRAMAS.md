@@ -251,14 +251,14 @@ flowchart LR
 flowchart TD
   A["Abrir la app"] --> B{"¿Hay idioma guardado?"}
   B -- "sí" --> L["Ese idioma"]
-  B -- "no" --> C["navigator.languages<br/>matchLocale()"]
+  B -- "no" --> C["navigator.languages<br/>elegirIdioma()"]
   C -- "disponible" --> L
   C -- "ninguno" --> BASE["Idioma base"]
   L --> D["Descarga su diccionario<br/>(si no es el base)"]
   D --> R["Pinta la app"]
   BASE --> R
   R --> H["&lt;html lang&gt;, SEO y fechas con Intl"]
-  S["Selector 🌐"] -- "setLocale()" --> G["Guarda la elección"] --> D
+  S["Selector 🌐"] -- "cambiarIdioma()" --> G["Guarda la elección"] --> D
 ```
 
 ## Inicio desde la plantilla

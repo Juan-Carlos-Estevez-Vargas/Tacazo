@@ -176,9 +176,17 @@ export class ServidorPartidas {
 
   private async atenderCola(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const datos = this.config.datos;
-    if (!datos) return this.responder(req, res, 503, { error: "La cola clasificatoria no está disponible" });
+    if (!datos)
+      return this.responder(req, res, 503, {
+        error: "La cola clasificatoria no está disponible",
+        codigo: "sin_cola",
+      });
     const j = this.jugadorDe(req);
-    if (!j) return this.responder(req, res, 401, { error: "Inicia sesión para jugar clasificatorias" });
+    if (!j)
+      return this.responder(req, res, 401, {
+        error: "Inicia sesión para jugar clasificatorias",
+        codigo: "sesion",
+      });
     const ahora = this.reloj.ahora();
     const actual = this.enCola.get(j);
 
@@ -218,17 +226,23 @@ export class ServidorPartidas {
     }
     if (actual?.tipo === "cobrando") return this.responder(req, res, 202, { estado: "buscando" });
     const perfil = await datos.perfil(j, modo);
-    if (!perfil) return this.responder(req, res, 401, { error: "No encontramos tu jugador" });
+    if (!perfil)
+      return this.responder(req, res, 401, { error: "No encontramos tu jugador", codigo: "sesion" });
     if (!perfil.juega)
-      return this.responder(req, res, 403, { error: "Tienes una sanción que no te deja jugar" });
+      return this.responder(req, res, 403, {
+        error: "Tienes una sanción que no te deja jugar",
+        codigo: "sancion",
+      });
     if (!perfil.clasifica)
       return this.responder(req, res, 403, {
         error: "Tienes una sanción que no te deja jugar clasificatorias",
+        codigo: "sancion_clasificatoria",
       });
     const nivel = salaPorId(sala)!;
     if (perfil.saldo < nivel.entrada)
       return this.responder(req, res, 409, {
         error: `No te alcanzan las monedas: la entrada a ${nivel.nombre} cuesta ${nivel.entrada}`,
+        codigo: "saldo",
       });
     this.colas.salir(j);
     this.colas.cola(modo, sala).entrar({
@@ -438,12 +452,13 @@ export class ServidorPartidas {
 
       if (partes[0] === "salas" && partes[1] && partes.length === 3) {
         const sala = this.salas.get(partes[1]);
-        if (!sala) return this.responder(req, res, 404, { error: "La sala no existe o ya terminó" });
+        if (!sala)
+          return this.responder(req, res, 404, { error: "La sala no existe o ya terminó", codigo: "sala" });
         if (req.method === "POST" && partes[2] === "unirse") {
           const cuerpo = (await leerCuerpo(req)) as Record<string, unknown>;
           const nombre = limpiarNombre(cuerpo.nombre);
           if (!sala.sentar(1, nombre))
-            return this.responder(req, res, 409, { error: "La sala ya está llena" });
+            return this.responder(req, res, 409, { error: "La sala ya está llena", codigo: "llena" });
           return this.responder(req, res, 200, {
             sala: sala.id,
             jugador: 1,

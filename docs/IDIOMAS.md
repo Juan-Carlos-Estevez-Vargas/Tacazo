@@ -36,6 +36,31 @@ stacks, se aplican las mismas reglas.
 11. **Legales.** El texto en el idioma base es el que vale. Las traducciones
     son de cortesía y lo dicen arriba (ver [LEGAL.md](LEGAL.md)).
 
+## En Tacazo
+
+El cliente no usa React, así que la base es la misma idea sin hooks:
+
+```
+apps/client/src/i18n/
+  idiomas.ts     IDIOMAS (es, en, pt), elegirIdioma() y su etiqueta BCP 47
+  es.ts          idioma base; define el tipo Mensajes
+  en.ts, pt.ts   mismas claves, tipadas con Mensajes (se descargan al usarlas)
+  index.ts       msg(), cambiarIdioma(), numero() con Intl, traducirPagina(), delServidor()
+  i18n.test.ts   detección, mismas claves en todos, cada data-t existe y nada en español suelto
+```
+
+- **HTML**: los textos fijos llevan `data-t="html.cancelar"` (y
+  `data-t-aria`, `data-t-title`, `data-t-placeholder` para atributos).
+  `traducirPagina()` los llena y cambia `<html lang>`, el título y la
+  descripción.
+- **Código**: `msg().juego.ganaste`, `msg().cola.buscando(s)`. Lo que se pinta
+  en código y debe cambiar al instante se suscribe con `alCambiarIdioma()`.
+- **Servidor**: la API y el servidor de partidas responden en español y, cuando
+  pueden, con un `codigo` (`saldo`, `sesion`, `sancion`…). `delServidor()`
+  traduce primero por código, luego por texto conocido (`servidor` en cada
+  diccionario) y, si no lo conoce, lo muestra tal cual.
+- **Nombres de salas**: se traducen por id en el cliente (`sala.nombres`).
+
 ## Estructura (React + TypeScript)
 
 ```

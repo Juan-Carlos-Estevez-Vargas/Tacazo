@@ -111,9 +111,12 @@ verificados del lado del servidor. Estado de cada punto en
 
 ## Accesibilidad, idiomas y SEO
 
-Nivel de accesibilidad que se busca (WCAG 2.2 AA), idiomas disponibles y cómo
-se detecta el del navegador ([IDIOMAS.md](docs/IDIOMAS.md)), y qué páginas se
-indexan.
+Se busca WCAG 2.2 AA. El juego está en **español, inglés y portugués**:
+arranca en el idioma del dispositivo y se cambia con el selector 🌐 del pie
+([IDIOMAS.md](docs/IDIOMAS.md)). Se puede jugar sin ratón (flechas para
+apuntar, Espacio sostenido en la barra de fuerza para tirar, teclas 1 a 6 para
+cantar la tronera de la 8), hay opción de **bolas con número** para quien
+confunde colores y se respeta «reducir movimiento» del sistema.
 
 ## Despliegue y versiones
 
