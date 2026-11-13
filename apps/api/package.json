@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./alertas": {
+      "types": "./dist/alertas.d.ts",
+      "default": "./dist/alertas.js"
+    },
     "./cuentas": {
       "types": "./dist/cuentas.d.ts",
       "default": "./dist/cuentas.js"
@@ -37,6 +41,7 @@
     "build": "tsc -b",
     "dev": "tsc -b && node --watch dist/index.js",
     "migrar": "tsc -b && node dist/cli-migrar.js",
+    "comprobar-copia": "tsc -b && node dist/cli-copia.js",
     "monedas": "tsc -b && node dist/cli-monedas.js",
     "senales": "tsc -b && node dist/cli-senales.js",
     "start": "node dist/index.js"

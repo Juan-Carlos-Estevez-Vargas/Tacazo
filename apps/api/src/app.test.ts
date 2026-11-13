@@ -274,4 +274,38 @@ describe("monedas y tienda por HTTP", () => {
     expect((await pedir("PATCH", "/yo/equipado", token, { sombrero: "x" })).statusCode).toBe(400);
     expect((await pedir("GET", "/yo", token)).json()).toMatchObject({ equipado: { taco: "taco_laton" } });
   });
+
+  it("la salud mira la base y los errores 500 avisan", async () => {
+    expect((await pedir("GET", "/salud")).json()).toMatchObject({ ok: true, base: true });
+    const avisos: string[] = [];
+    const caida = new Proxy(base, {
+      get: (b, k) =>
+        k === "cerrar"
+          ? async () => undefined
+          : typeof b[k as keyof Base] === "function"
+            ? async () => {
+                throw new Error("conexión perdida");
+              }
+            : b[k as keyof Base],
+    });
+    const rota = await crearApi({
+      base: caida,
+      secreto: SECRETO,
+      verificarCuenta: async () => null,
+      verificarHumano: null,
+      origenes: [],
+      alertar: (contexto, e) => avisos.push(`${contexto}: ${(e as Error).message}`),
+    });
+    const salud = await rota.inject({ method: "GET", url: "/salud" });
+    expect(salud.statusCode).toBe(503);
+    const r = await rota.inject({
+      method: "POST",
+      url: "/invitados",
+      payload: { nombre: "Ana", pais: null },
+    });
+    expect(r.statusCode).toBe(500);
+    expect(r.json()).toEqual({ error: "interno", mensaje: "Algo falló de nuestro lado" });
+    expect(avisos).toEqual(["salud: conexión perdida", "POST /invitados: conexión perdida"]);
+    await rota.close();
+  });
 });
