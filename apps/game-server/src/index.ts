@@ -25,7 +25,14 @@ const url = process.env.DATABASE_URL;
 if (!url) console.warn("Sin DATABASE_URL: la cola clasificatoria queda apagada.");
 const datos = url ? datosPg(await basePg(url)) : null;
 
-const servidor = new ServidorPartidas({ secreto, origenes, datos });
+// Solo para pruebas de carga en local; en producción se ignora.
+const salasPorMinuto = produccion ? undefined : Number(process.env.TACAZO_SALAS_POR_MINUTO) || undefined;
+const servidor = new ServidorPartidas({
+  secreto,
+  origenes,
+  datos,
+  ...(salasPorMinuto ? { salasPorMinuto } : {}),
+});
 const p = await servidor.escuchar(puerto);
 setInterval(() => servidor.limpiar(), 60_000).unref();
 setInterval(() => servidor.emparejar(), 1_000).unref();
